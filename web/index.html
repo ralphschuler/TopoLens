@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BGP Live View</title>
+    <style>
+      html,
+      body,
+      #app {
+        margin: 0;
+        height: 100%;
+        background: #0b0f14;
+        color: #cbd5e1;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .hud {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background: #111827aa;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-size: 14px;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="hud">Wheel: Zoom · Drag: Pan · Click Node: Highlight</div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

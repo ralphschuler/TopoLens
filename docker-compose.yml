@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  gobgp:
+    image: osrg/gobgp:latest
+    container_name: gobgp
+    network_mode: host
+    volumes:
+      - ./gobgp/gobgpd.conf:/etc/gobgpd.conf:ro
+    command: ["gobgpd", "-f", "/etc/gobgpd.conf"]
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: bgp-api
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/data/bgp.db
+      - DEMO_MODE=${DEMO_MODE:-false}
+      - GOBGP_BIN=/usr/local/bin/gobgp
+      - WS_HEARTBEAT_MS=15000
+    volumes:
+      - api_data:/data
+    depends_on:
+      - gobgp
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    container_name: bgp-web
+    depends_on:
+      - api
+    environment:
+      - VITE_API_BASE=http://localhost:8080
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+volumes:
+  api_data:
