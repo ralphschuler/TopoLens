@@ -2,13 +2,13 @@ FROM ubuntu:latest AS base
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        gnupg \
-        git \
-        make \
-        g++ \
-        python3 \
+    ca-certificates \
+    curl \
+    gnupg \
+    git \
+    make \
+    g++ \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get update \
@@ -41,7 +41,7 @@ RUN curl -fsSL "https://github.com/osrg/gobgp/releases/download/v${GOBGP_VERSION
 WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY --from=build /app/dist dist
-COPY src/schema.sql dist/src/schema.sql
+COPY src/schema.sql dist/schema.sql
 ENV NODE_ENV=production
 EXPOSE 8080
-CMD ["node", "dist/src/index.js"]
+CMD ["node", "dist/index.js"]
