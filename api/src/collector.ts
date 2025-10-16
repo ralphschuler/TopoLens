@@ -110,23 +110,136 @@ export async function initialRIBLoad(): Promise<void> {
 
 export type MonitorStopper = () => void;
 
+// Realistic ASNs representing major ISPs and networks
+const MAJOR_ASNS = [
+  7922, // Comcast
+  3356, // Level3
+  174,  // Cogent
+  6939, // Hurricane Electric
+  1299, // Telia
+  2914, // NTT Communications
+  3257, // GTT
+  5511, // Orange
+  1273, // Vodafone
+  15169, // Google
+  16509, // Amazon
+  8075,  // Microsoft
+  13335, // Cloudflare
+  32934, // Facebook
+];
+
+const demoAnnouncedPrefixes = new Set<string>();
+
+function initializeDemoData(onAnnounce: AnnounceHandler): void {
+  const ts = Date.now();
+  
+  // Generate initial "internet routing table" with major networks
+  for (let i = 0; i < 100; i++) {
+    const originAS = MAJOR_ASNS[Math.floor(Math.random() * MAJOR_ASNS.length)];
+    const transitAS = MAJOR_ASNS[Math.floor(Math.random() * MAJOR_ASNS.length)];
+    
+    // Create realistic prefixes
+    const octet1 = Math.floor(Math.random() * 223) + 1; // Avoid 0 and reserved ranges
+    const octet2 = Math.floor(Math.random() * 256);
+    const octet3 = Math.floor(Math.random() * 256);
+    const maskLength = Math.random() < 0.7 ? 24 : (Math.random() < 0.5 ? 16 : 8);
+    
+    const prefix = `${octet1}.${octet2}.${octet3}.0/${maskLength}`;
+    const as_path = originAS !== transitAS ? `${transitAS} ${originAS}` : `${originAS}`;
+    const next_hop = `10.0.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+    
+    demoAnnouncedPrefixes.add(prefix);
+    upsertPrefix({ prefix, origin_as: originAS, next_hop, as_path, ts });
+    upsertEdgesFromASPath(as_path, ts);
+    addEvent({ ts, type: "announce", prefix, origin_as: originAS, as_path, next_hop });
+    onAnnounce({ ts, prefix, origin_as: originAS, as_path, next_hop });
+  }
+}
+
+function generateRealisticAnnouncement(ts: number, onAnnounce: AnnounceHandler): void {
+  const originAS = MAJOR_ASNS[Math.floor(Math.random() * MAJOR_ASNS.length)];
+  const transitAS = MAJOR_ASNS[Math.floor(Math.random() * MAJOR_ASNS.length)];
+  
+  // Generate new prefix
+  const octet1 = Math.floor(Math.random() * 223) + 1;
+  const octet2 = Math.floor(Math.random() * 256);
+  const octet3 = Math.floor(Math.random() * 256);
+  const prefix = `${octet1}.${octet2}.${octet3}.0/24`;
+  
+  const as_path = originAS !== transitAS ? `${transitAS} ${originAS}` : `${originAS}`;
+  const next_hop = `10.0.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+  
+  demoAnnouncedPrefixes.add(prefix);
+  upsertPrefix({ prefix, origin_as: originAS, next_hop, as_path, ts });
+  upsertEdgesFromASPath(as_path, ts);
+  addEvent({ ts, type: "announce", prefix, origin_as: originAS, as_path, next_hop });
+  onAnnounce({ ts, prefix, origin_as: originAS, as_path, next_hop });
+}
+
+function generateMultiHopAnnouncement(ts: number, onAnnounce: AnnounceHandler): void {
+  // Create longer AS paths (2-4 hops) to show more network topology
+  const pathLength = Math.floor(Math.random() * 3) + 2;
+  const asPath: number[] = [];
+  
+  for (let i = 0; i < pathLength; i++) {
+    let candidate: number;
+    do {
+      candidate = MAJOR_ASNS[Math.floor(Math.random() * MAJOR_ASNS.length)];
+    } while (asPath.includes(candidate)); // Avoid loops
+    asPath.push(candidate);
+  }
+  
+  const originAS = asPath[asPath.length - 1];
+  const octet1 = Math.floor(Math.random() * 223) + 1;
+  const octet2 = Math.floor(Math.random() * 256);
+  const octet3 = Math.floor(Math.random() * 256);
+  const prefix = `${octet1}.${octet2}.${octet3}.0/24`;
+  
+  const as_path = asPath.join(" ");
+  const next_hop = `10.0.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+  
+  demoAnnouncedPrefixes.add(prefix);
+  upsertPrefix({ prefix, origin_as: originAS, next_hop, as_path, ts });
+  upsertEdgesFromASPath(as_path, ts);
+  addEvent({ ts, type: "announce", prefix, origin_as: originAS, as_path, next_hop });
+  onAnnounce({ ts, prefix, origin_as: originAS, as_path, next_hop });
+}
+
+function generateWithdrawal(ts: number, onWithdraw: WithdrawHandler): void {
+  if (demoAnnouncedPrefixes.size === 0) return;
+  
+  const prefixes = Array.from(demoAnnouncedPrefixes);
+  const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+  
+  demoAnnouncedPrefixes.delete(randomPrefix);
+  addEvent({ ts, type: "withdraw", prefix: randomPrefix, origin_as: null });
+  onWithdraw({ ts, prefix: randomPrefix });
+}
+
 export function startUpdateMonitor(
   onAnnounce: AnnounceHandler,
   onWithdraw: WithdrawHandler,
 ): MonitorStopper {
   if (DEMO_MODE) {
+    // Initialize with some realistic looking BGP data to simulate "whole internet"
+    initializeDemoData(onAnnounce);
+    
     const timer = setInterval(() => {
       const ts = Date.now();
-      const a = Math.floor(65000 + Math.random() * 1000);
-      const b = a + 1;
-      const prefix = `10.${a % 255}.${b % 255}.0/24`;
-      const as_path = `${a} ${b}`;
-      const next_hop = `192.0.2.${b % 255}`;
-      upsertPrefix({ prefix, origin_as: a, next_hop, as_path, ts });
-      upsertEdgesFromASPath(as_path, ts);
-      addEvent({ ts, type: "announce", prefix, origin_as: a, as_path, next_hop });
-      onAnnounce({ ts, prefix, origin_as: a, as_path, next_hop });
-    }, 1000);
+      // Create more realistic AS paths and announcements
+      const scenario = Math.random();
+      
+      if (scenario < 0.7) {
+        // Normal announcement with realistic AS path
+        generateRealisticAnnouncement(ts, onAnnounce);
+      } else if (scenario < 0.9) {
+        // Multi-hop AS path announcement  
+        generateMultiHopAnnouncement(ts, onAnnounce);
+      } else {
+        // Withdrawal
+        generateWithdrawal(ts, onWithdraw);
+      }
+    }, Math.random() * 2000 + 500); // Variable timing 0.5-2.5s
     timer.unref?.();
     return () => clearInterval(timer);
   }

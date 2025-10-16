@@ -18,7 +18,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 FROM base AS build
 WORKDIR /app
 COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN npm ci
 COPY . .
 RUN npm run build
 

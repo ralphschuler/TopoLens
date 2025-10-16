@@ -1,8 +1,8 @@
-version: "3.8"
-
 services:
   gobgp:
-    image: osrg/gobgp:latest
+    build:
+      context: ./gobgp
+      dockerfile: Dockerfile
     container_name: gobgp
     network_mode: host
     volumes:
