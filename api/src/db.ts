@@ -85,8 +85,11 @@ export function getSnapshot(): {
 } {
   const nodes = db
     .prepare(`SELECT DISTINCT origin_as AS asn FROM prefix WHERE origin_as IS NOT NULL`)
-    .all();
-  const edges = db.prepare(`SELECT src_as, dst_as FROM as_edge`).all();
+    .all() as Array<{ asn: number }>;
+  const edges = db.prepare(`SELECT src_as, dst_as FROM as_edge`).all() as Array<{
+    src_as: number;
+    dst_as: number;
+  }>;
   return { nodes, edges };
 }
 
