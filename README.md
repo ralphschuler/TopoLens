@@ -67,8 +67,6 @@ TopoLens/
 ## Docker Compose
 
 ```yaml
-version: "3.8"
-
 services:
   gobgp:
     image: osrg/gobgp:latest
@@ -1091,10 +1089,50 @@ The main branch includes additional automation for:
 
 ## API Surface
 
-* `GET /api/snapshot` → `{ nodes:[{asn}], edges:[{src_as,dst_as}] }`
-* `WS /ws` → messages of the form:
-  * `{"type":"announce","ts":..., "prefix":"x/y","origin_as":65000,"as_path":"65000 3356 15169","next_hop":"..." }`
-  * `{"type":"withdraw","ts":..., "prefix":"x/y"}`
+### REST Endpoints
+
+* `GET /api/snapshot` → Returns current AS-level topology
+  ```json
+  {
+    "nodes": [{ "asn": 65001 }, { "asn": 65002 }],
+    "edges": [{ "src_as": 65001, "dst_as": 65002 }]
+  }
+  ```
+
+### WebSocket Messages (`/ws`)
+
+The WebSocket endpoint streams live BGP events:
+
+**Announce Message:**
+```json
+{
+  "type": "announce",
+  "ts": 1640995200000,
+  "prefix": "10.0.1.0/24",
+  "origin_as": 65001,
+  "as_path": "65001 65002 3356",
+  "next_hop": "192.168.1.1"
+}
+```
+
+**Withdraw Message:**
+```json
+{
+  "type": "withdraw",
+  "ts": 1640995200000,
+  "prefix": "10.0.1.0/24"
+}
+```
+
+**Heartbeat Message (optional):**
+```json
+{
+  "type": "heartbeat",
+  "ts": 1640995200000
+}
+```
+
+Heartbeat messages are sent when `WS_HEARTBEAT_MS` environment variable is set to a positive value.
 
 ## Data Model & Aggregation
 
@@ -1110,21 +1148,96 @@ The main branch includes additional automation for:
 
 ## Troubleshooting
 
-* **BGP session down**: Verify router configuration, firewalls, and TCP/179 reachability; inspect GoBGP logs.
-* **Missing JSON output**: Ensure the container image includes GoBGP (`apk add gobgp` in the API image).
-* **Empty visualization**: Enable `DEMO_MODE=true` for smoke tests.
-* **Slow canvas performance**: Limit node count (e.g., top-AS by degree), throttle edge additions, or reduce layout iterations.
+### Common Development Issues
+
+* **Empty visualization**: 
+  - Set `DEMO_MODE=true` in `.env` for development without BGP peers
+  - Check browser console for WebSocket connection errors
+  - Verify API is running on `http://localhost:8080`
+
+* **Tests failing**:
+  - Run `npm install` in both `api/` and `web/` directories
+  - Ensure Node.js 20+ is installed
+  - Check that SQLite is working with `npm test` in the `api/` directory
+
+* **Linting errors**:
+  - Run `npm run lint:fix` to auto-fix most issues
+  - Run `npm run format:write` to apply Prettier formatting
+  - Check ESLint configuration in `eslint.config.mjs`
+
+### Production Issues
+
+* **BGP session down**: 
+  - Verify router configuration and TCP/179 connectivity
+  - Check GoBGP logs: `docker compose logs gobgp`
+  - Ensure `gobgpd.conf` has correct peer IP and AS numbers
+
+* **Missing BGP data**: 
+  - Verify GoBGP binary is available in API container
+  - Check API logs: `docker compose logs api`
+  - Confirm `DEMO_MODE=false` for live BGP monitoring
+
+* **Performance issues**: 
+  - Monitor WebSocket message volume in browser dev tools
+  - Consider AS-path filtering for large routing tables
+  - Reduce canvas animation frequency for large topologies
+  - Use `WS_HEARTBEAT_MS=0` to disable heartbeats if not needed
+
+### Container Issues
+
+* **Build failures**: 
+  - Check Docker and Node.js compatibility
+  - Clear Docker build cache: `docker builder prune`
+  - Verify internet connectivity for package downloads
+
+* **Database issues**:
+  - Check SQLite file permissions in Docker volume
+  - Verify `DB_PATH` environment variable
+  - Database is automatically recreated if schema changes
 
 ## Security & Operations
 
-* Expose the stack only on trusted networks when possible.
-* SQLite lives in the `api_data` volume with WAL mode enabled for durability.
-* Add rate limiting for REST/WS endpoints if you plan to expose them externally (Fastify plug-ins).
-* Health checks can be added to the API container for better observability.
+### Security Considerations
+
+* **Network Exposure**: Run on trusted networks only; the stack has no authentication
+* **BGP Peering**: Use dedicated interfaces for BGP sessions when possible  
+* **Container Security**: Keep base images updated; consider running containers as non-root
+* **Data Persistence**: SQLite database persists in `api_data` Docker volume with WAL mode
+
+### Production Deployment
+
+* **Rate Limiting**: Add Fastify rate limiting for external exposure
+* **Health Checks**: API includes `/api/snapshot` for health monitoring
+* **Monitoring**: Use structured logging from Fastify for observability
+* **Scaling**: Consider read replicas for SQLite or migration to PostgreSQL for high load
+* **Backup**: Regular backups of the `api_data` volume for data retention
 
 ## Roadmap
 
-* Advanced filters (search by AS, communities, IPv4/IPv6 selectors).
-* History playback (time scrubber for the events log).
-* Geo-visualization (map integration once you maintain local GeoIP data).
-* BMP ingestion (alternative collector path if you prefer BMP exports).
+### Visualization Enhancements
+- [ ] Advanced AS filtering and search capabilities
+- [ ] Node clustering by geographic regions or relationships  
+- [ ] Historical playback with timeline scrubber
+- [ ] Multiple layout algorithms (force-directed, hierarchical, geographic)
+- [ ] Export topology data (GraphML, GEXF formats)
+
+### Data & Monitoring
+- [ ] BGP community attribute support
+- [ ] IPv4/IPv6 prefix filtering and visualization
+- [ ] Route hijack and leak detection alerts
+- [ ] Performance metrics and dashboards
+- [ ] Data retention policies and archival
+
+### Integration & Extensibility  
+- [ ] BMP (BGP Monitoring Protocol) ingestion support
+- [ ] RPKI validation status display
+- [ ] REST API for external integrations
+- [ ] Plugin system for custom analyzers
+- [ ] Webhook notifications for significant events
+
+### Deployment & Scaling
+- [ ] Multi-collector support for redundancy
+- [ ] Horizontal scaling with message queues
+- [ ] PostgreSQL support for larger deployments
+- [ ] Kubernetes deployment manifests
+- [ ] Prometheus metrics export
