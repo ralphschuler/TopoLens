@@ -14,14 +14,19 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: linear-gradient(180deg, #0b1120 0%, #13264d 100%);
+  background: radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.15), transparent 45%),
+    radial-gradient(circle at 100% 0%, rgba(34, 197, 94, 0.12), transparent 45%),
+    linear-gradient(180deg, #0b1120 0%, #13264d 100%);
   color: #f8fafc;
 }
 
 main {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 3rem;
+  min-height: 100vh;
+  padding: 2rem clamp(1rem, 3vw, 3rem) 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  position: relative;
 }
 
 a {
@@ -38,10 +43,6 @@ button {
   border-radius: 16px;
   padding: 1.5rem;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.35);
-}
-
-.panel + .panel {
-  margin-top: 1.5rem;
 }
 
 .updates-list {
@@ -82,6 +83,30 @@ button {
   flex-wrap: wrap;
 }
 
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.app-header {
+  position: relative;
+  z-index: 1;
+}
+
+.app-header p {
+  margin: 0;
+  color: #cbd5f5;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -112,12 +137,6 @@ button {
   color: #fecaca;
 }
 
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
 button.secondary {
   background: transparent;
   border: 1px solid rgba(148, 163, 184, 0.4);
@@ -142,6 +161,163 @@ button.secondary:hover {
   background: rgba(15, 23, 42, 0.45);
 }
 
+.error-text {
+  color: #fca5a5;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.graph-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 420px;
+  position: relative;
+  overflow: hidden;
+}
+
+.graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #cbd5f5;
+}
+
+.graph-canvas {
+  flex: 1;
+  min-height: 320px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+
+.graph-canvas canvas {
+  border-radius: 12px;
+}
+
+.filter-drawer,
+.log-drawer {
+  position: fixed;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 30px 60px rgba(8, 15, 30, 0.6);
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  z-index: 30;
+  transition: transform 0.35s ease;
+}
+
+.filter-drawer {
+  left: clamp(1rem, 6vw, 6rem);
+  right: clamp(1rem, 6vw, 6rem);
+  padding: 1.75rem;
+  transform: translateY(calc(-100% - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.filter-drawer.open {
+  transform: translateY(0);
+}
+
+.log-drawer {
+  top: 2rem;
+  right: clamp(1rem, 4vw, 3rem);
+  bottom: 2rem;
+  width: min(420px, calc(100vw - clamp(2rem, 10vw, 6rem)));
+  transform: translateX(calc(100% + 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.log-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.drawer-header h2 {
+  margin: 0;
+}
+
+.drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.logs-content {
+  overflow: auto;
+  padding-right: 0.5rem;
+}
+
+.drawer-content label {
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.drawer-content input[type="text"] {
+  margin-top: 0.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  color: #f8fafc;
+  padding: 0.6rem 0.85rem;
+  font: inherit;
+}
+
+.drawer-content input[type="text"]::placeholder {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.filter-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #cbd5f5;
+}
+
+.drawer-helper {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.drawer-content .secondary {
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .filter-drawer {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  .log-drawer {
+    width: min(360px, calc(100vw - 2rem));
+  }
+}
+
 @media (max-width: 600px) {
   main {
     padding: 1.5rem 1rem 2.5rem;
@@ -149,5 +325,17 @@ button.secondary:hover {
 
   .panel {
     padding: 1.25rem;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+
+  .graph-panel {
+    min-height: 360px;
+  }
+
+  .graph-canvas {
+    min-height: 280px;
   }
 }
