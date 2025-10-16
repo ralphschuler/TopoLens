@@ -4,6 +4,12 @@ import { addEvent, upsertEdgesFromASPath, upsertPrefix } from "./db.js";
 const GOBGP_BIN = process.env.GOBGP_BIN ?? "gobgp";
 const DEMO_MODE = (process.env.DEMO_MODE ?? "false").toLowerCase() === "true";
 
+type Attribute = {
+  type?: string;
+  value?: unknown;
+  nexthop?: string | null;
+};
+
 export type AnnounceHandler = (payload: {
   ts: number;
   prefix: string;
@@ -31,10 +37,15 @@ type RIBEntry = {
   }>;
 };
 
+function toAttributes(attrs: unknown[] | undefined): Attribute[] {
+  if (!Array.isArray(attrs)) return [];
+  return attrs.filter((attr): attr is Attribute => typeof attr === "object" && attr !== null);
+}
+
 function extractOrigin(attrs: unknown[] | undefined): number | null {
-  if (!attrs) return null;
-  const asPathAttr = attrs.find(
-    (attr: any) => typeof attr?.type === "string" && attr.type.toLowerCase().includes("as_path"),
+  const typedAttrs = toAttributes(attrs);
+  const asPathAttr = typedAttrs.find(
+    (attr) => typeof attr.type === "string" && attr.type.toLowerCase().includes("as_path"),
   );
   const values: number[] = Array.isArray(asPathAttr?.value)
     ? (asPathAttr.value as unknown[])
@@ -47,9 +58,9 @@ function extractOrigin(attrs: unknown[] | undefined): number | null {
 }
 
 function extractASPath(attrs: unknown[] | undefined): string | undefined {
-  if (!attrs) return undefined;
-  const asPathAttr = attrs.find(
-    (attr: any) => typeof attr?.type === "string" && attr.type.toLowerCase().includes("as_path"),
+  const typedAttrs = toAttributes(attrs);
+  const asPathAttr = typedAttrs.find(
+    (attr) => typeof attr.type === "string" && attr.type.toLowerCase().includes("as_path"),
   );
   const values = Array.isArray(asPathAttr?.value)
     ? (asPathAttr.value as unknown[]).flat().filter((part) => Number.isInteger(Number(part)))
@@ -61,10 +72,12 @@ function extractNextHop(
   attrs: unknown[] | undefined,
   fallback?: string | null,
 ): string | null | undefined {
-  if (!attrs) return fallback;
-  const nh = attrs.find((attr: any) => attr?.type?.toLowerCase() === "next_hop");
+  const typedAttrs = toAttributes(attrs);
+  const nh = typedAttrs.find((attr) => attr.type?.toLowerCase() === "next_hop");
   if (!nh) return fallback;
-  return nh?.nexthop ?? nh?.value ?? fallback;
+  const candidate = nh.nexthop ?? (typeof nh.value === "string" ? nh.value : null);
+  if (candidate === null || candidate === undefined) return fallback;
+  return candidate;
 }
 
 export async function initialRIBLoad(): Promise<void> {
@@ -84,11 +97,11 @@ export async function initialRIBLoad(): Promise<void> {
   const entries: RIBEntry[] = JSON.parse(buffer);
   const now = Date.now();
   for (const entry of entries) {
-    const primary = entry.paths?.[0] ?? {};
-    const attrs = primary.attrs as unknown[] | undefined;
+    const primary = entry.paths?.[0];
+    const attrs = primary?.attrs as unknown[] | undefined;
     const origin_as = extractOrigin(attrs);
     const as_path = extractASPath(attrs);
-    const next_hop = extractNextHop(attrs, primary.nexthop ?? null) ?? null;
+    const next_hop = extractNextHop(attrs, primary?.nexthop ?? null) ?? null;
     upsertPrefix({ prefix: entry.prefix, origin_as, next_hop, as_path, ts: now });
     upsertEdgesFromASPath(as_path, now);
   }
