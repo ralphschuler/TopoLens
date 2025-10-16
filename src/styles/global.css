@@ -1,0 +1,153 @@
+:root {
+  color-scheme: dark light;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #0b1120;
+  background-color: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0b1120 0%, #13264d 100%);
+  color: #f8fafc;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.35);
+}
+
+.panel + .panel {
+  margin-top: 1.5rem;
+}
+
+.updates-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.update-item {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(100, 116, 139, 0.4);
+  display: grid;
+  gap: 0.25rem;
+}
+
+.update-meta {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.update-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #bfdbfe;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.status-pill[data-state="connected"] {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #bbf7d0;
+}
+
+.status-pill[data-state="connecting"] {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.45);
+  color: #fef08a;
+}
+
+.status-pill[data-state="error"] {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+button.secondary {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+button.secondary:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.empty-state {
+  font-size: 0.95rem;
+  color: #cbd5f5;
+  padding: 1rem;
+  text-align: center;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+@media (max-width: 600px) {
+  main {
+    padding: 1.5rem 1rem 2.5rem;
+  }
+
+  .panel {
+    padding: 1.25rem;
+  }
+}
