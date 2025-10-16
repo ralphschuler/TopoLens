@@ -94,7 +94,8 @@ export async function initialRIBLoad(): Promise<void> {
 
   if (!buffer.trim()) return;
 
-  const entries: RIBEntry[] = JSON.parse(buffer);
+  const parsed = JSON.parse(buffer);
+  const entries: RIBEntry[] = Array.isArray(parsed) ? parsed : [];
   const now = Date.now();
   for (const entry of entries) {
     const primary = entry.paths?.[0];
