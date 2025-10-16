@@ -5,6 +5,8 @@ dist/
 npm-debug.log*
 coverage/
 *.db
+*.db-shm
+*.db-wal
 
 # Environment
 .env

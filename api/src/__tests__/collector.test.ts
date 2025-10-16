@@ -139,4 +139,34 @@ describe("collector", () => {
     expect(killMock).toHaveBeenCalled();
     stopSpy = undefined;
   });
+
+  it("handles non-array JSON output gracefully", async () => {
+    // Test various non-array JSON outputs that might cause "entries is not iterable"
+    const testCases = [
+      '{"error": "connection failed"}', // Error object
+      "null", // Null value
+      '"no routes"', // String value
+      "{}", // Empty object
+      '{"routes": []}', // Object with routes property
+    ];
+
+    for (const testCase of testCases) {
+      const emitter = new EventEmitter();
+      const stdout = new PassThrough();
+
+      const killMock = vi.fn();
+      spawnMock.mockReturnValueOnce({
+        stdout,
+        on: emitter.on.bind(emitter),
+        kill: killMock,
+      } as any);
+
+      const loadPromise = collector.initialRIBLoad();
+      stdout.emit("data", Buffer.from(testCase));
+      emitter.emit("close");
+
+      // Should not throw an error
+      await expect(loadPromise).resolves.toBeUndefined();
+    }
+  });
 });
