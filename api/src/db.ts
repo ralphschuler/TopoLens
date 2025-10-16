@@ -1,12 +1,9 @@
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-
-const require = createRequire(import.meta.url);
-const { DatabaseSync } = require("node:sqlite");
+import Database from "better-sqlite3";
 
 const dbPath = process.env.DB_PATH ?? "./bgp.db";
-const db = new DatabaseSync(dbPath);
+const db = new Database(dbPath);
 
 type PrefixRow = {
   prefix: string;
@@ -58,7 +55,11 @@ export function addEvent(row: EventRow): void {
   db.prepare(
     `INSERT INTO events (ts, type, prefix, origin_as, as_path, next_hop)
      VALUES (@ts, @type, @prefix, @origin_as, @as_path, @next_hop)`,
-  ).run(row);
+  ).run({
+    ...row,
+    as_path: row.as_path ?? null,
+    next_hop: row.next_hop ?? null,
+  });
 }
 
 export function upsertEdgesFromASPath(asPath: string | undefined, ts: number): void {
