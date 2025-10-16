@@ -7,7 +7,7 @@ export type LiveAnnounce = {
   prefix: string;
   origin_as: number | null;
   as_path?: string;
-  next_hop?: string;
+  next_hop?: string | null;
 };
 
 export type LiveWithdraw = {
