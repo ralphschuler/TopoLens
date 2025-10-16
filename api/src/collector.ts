@@ -9,7 +9,7 @@ export type AnnounceHandler = (payload: {
   prefix: string;
   origin_as: number | null;
   as_path?: string;
-  next_hop?: string | null;
+  next_hop?: string;
 }) => void;
 
 export type WithdrawHandler = (payload: { ts: number; prefix: string }) => void;
@@ -36,8 +36,8 @@ function extractOrigin(attrs: unknown[] | undefined): number | null {
   const asPathAttr = attrs.find(
     (attr: any) => typeof attr?.type === "string" && attr.type.toLowerCase().includes("as_path"),
   );
-  const values: number[] = Array.isArray(asPathAttr?.value)
-    ? (asPathAttr.value as unknown[])
+  const values: number[] = Array.isArray((asPathAttr as any)?.value)
+    ? ((asPathAttr as any).value as unknown[])
         .flat()
         .map((v) => Number(v))
         .filter((v) => Number.isInteger(v))
@@ -51,8 +51,8 @@ function extractASPath(attrs: unknown[] | undefined): string | undefined {
   const asPathAttr = attrs.find(
     (attr: any) => typeof attr?.type === "string" && attr.type.toLowerCase().includes("as_path"),
   );
-  const values = Array.isArray(asPathAttr?.value)
-    ? (asPathAttr.value as unknown[]).flat().filter((part) => Number.isInteger(Number(part)))
+  const values = Array.isArray((asPathAttr as any)?.value)
+    ? ((asPathAttr as any).value as unknown[]).flat().filter((part) => Number.isInteger(Number(part)))
     : [];
   return values.map((part) => String(part)).join(" ");
 }
@@ -64,7 +64,7 @@ function extractNextHop(
   if (!attrs) return fallback;
   const nh = attrs.find((attr: any) => attr?.type?.toLowerCase() === "next_hop");
   if (!nh) return fallback;
-  return nh?.nexthop ?? nh?.value ?? fallback;
+  return (nh as any)?.nexthop ?? (nh as any)?.value ?? fallback;
 }
 
 export async function initialRIBLoad(): Promise<void> {
@@ -150,7 +150,7 @@ export function startUpdateMonitor(
             as_path,
             next_hop: next_hop ?? undefined,
           });
-          onAnnounce({ ts, prefix, origin_as, as_path, next_hop });
+          onAnnounce({ ts, prefix, origin_as, as_path, next_hop: next_hop ?? undefined });
         }
       }
 

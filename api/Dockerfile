@@ -9,8 +9,9 @@ COPY --from=deps /app/node_modules node_modules
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine
-RUN apk add --no-cache gobgp
+FROM node:20-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=osrg/gobgp:latest /go/bin/gobgp /usr/local/bin/gobgp
 WORKDIR /app
 COPY --from=deps /app/node_modules node_modules
 COPY --from=build /app/dist dist
