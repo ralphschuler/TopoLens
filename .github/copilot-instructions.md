@@ -48,7 +48,7 @@ Both `api/` and `web/` packages maintain identical quality standards:
 
 ```json
 {
-  "test": "vitest run",           // Run all tests
+  "test": "vitest run", // Run all tests
   "lint": "eslint --max-warnings=0 \"src/**/*.{ts,tsx}\"",
   "lint:fix": "npm run lint -- --fix",
   "format": "prettier --check \"src/**/*.{ts,tsx,js,json}\"",
@@ -80,6 +80,7 @@ Both `api/` and `web/` packages maintain identical quality standards:
 - **Error Handling**: Graceful handling of BGP collector failures
 
 Key patterns:
+
 ```typescript
 // Database operations use WAL mode SQLite
 const db = new DatabaseSync(dbPath);
@@ -93,16 +94,21 @@ await app.register(websocket);
 ### Web Frontend (Canvas + WebSocket)
 
 - **Rendering**: HTML5 Canvas with force-directed graph layout
-- **Real-time**: WebSocket connection for live BGP updates  
+- **Real-time**: WebSocket connection for live BGP updates
 - **Interaction**: Pan, zoom, and node selection capabilities
 - **Performance**: Optimized for large network topologies
 
 Key patterns:
+
 ```typescript
 // Canvas-based graph visualization
 class CanvasGraph {
-  private simulate(dt: number) { /* physics simulation */ }
-  private draw() { /* canvas rendering */ }
+  private simulate(dt: number) {
+    /* physics simulation */
+  }
+  private draw() {
+    /* canvas rendering */
+  }
 }
 
 // WebSocket integration
@@ -126,7 +132,7 @@ connectWS((msg) => {
 
 1. **Install Dependencies**: `npm install` in both `api/` and `web/`
 2. **Environment Setup**: Copy `.env.example` to `.env`, set `DEMO_MODE=true` for development
-3. **Development Mode**: 
+3. **Development Mode**:
    - API: `cd api && npm run dev` (tsx watch mode)
    - Web: `cd web && npm run dev` (Vite dev server)
 4. **Full Stack**: `docker compose up --build` (production-like environment)
@@ -134,12 +140,14 @@ connectWS((msg) => {
 ### Testing & Quality
 
 **Before making changes:**
+
 ```bash
 cd api && npm test && npm run lint && npm run format
 cd ../web && npm test && npm run lint && npm run format
 ```
 
 **Code changes should:**
+
 - Add/update tests first (test-driven development)
 - Pass all existing tests without modification
 - Follow existing patterns and conventions
