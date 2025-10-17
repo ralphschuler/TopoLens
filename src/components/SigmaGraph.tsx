@@ -121,6 +121,8 @@ export function SigmaGraph({ nodes, links, className }: SigmaGraphProps): JSX.El
         count: node.count,
         size,
         color: NODE_COLORS[node.type],
+        x: 0,
+        y: 0,
       });
     }
 
