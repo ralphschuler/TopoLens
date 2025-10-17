@@ -184,7 +184,7 @@ function UpdateRow({ update }: { update: RipeUpdate }) {
 }
 
 export default function App(): JSX.Element {
-  const { status, updates, error, reconnect, clearHistory } = useRipeRis(50);
+  const { status, updates, recentUpdates, error, reconnect, clearHistory } = useRipeRis(50);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(true);
   const [globalQuery, setGlobalQuery] = useState("");
@@ -273,16 +273,21 @@ export default function App(): JSX.Element {
     return { matcher, errors };
   }, [fieldFilters, globalQuery, kindFilters, showIpv4, showIpv6, useRegex]);
 
-  const filteredUpdates = useMemo(
+  const filteredGraphUpdates = useMemo(
     () => updates.filter((update) => filterMatcher(update)),
     [filterMatcher, updates],
+  );
+
+  const filteredRecentUpdates = useMemo(
+    () => recentUpdates.filter((update) => filterMatcher(update)),
+    [filterMatcher, recentUpdates],
   );
 
   const {
     graph: graphData,
     isComputing: isGraphComputing,
     error: graphError,
-  } = useGraphData(filteredUpdates);
+  } = useGraphData(filteredGraphUpdates);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -410,7 +415,7 @@ export default function App(): JSX.Element {
               <div className="space-y-1">
                 <CardTitle className="text-2xl text-white">Live connectivity map</CardTitle>
                 <CardDescription className="text-slate-300/80">
-                  {filteredUpdates.length} visible update{filteredUpdates.length === 1 ? "" : "s"}
+                  {`${filteredGraphUpdates.length} visible update${filteredGraphUpdates.length === 1 ? "" : "s"}`}
                 </CardDescription>
                 {graphError && <p className="text-sm text-rose-300">{graphError}</p>}
               </div>
@@ -463,7 +468,7 @@ export default function App(): JSX.Element {
             <div>
               <h2 className="text-lg font-semibold text-white">Recent updates</h2>
               <p className="text-xs text-slate-300/80">
-                {filteredUpdates.length === 0
+                {filteredRecentUpdates.length === 0
                   ? "No updates match the current filters."
                   : "Latest captured BGP events"}
               </p>
@@ -473,13 +478,13 @@ export default function App(): JSX.Element {
             </Button>
           </div>
           <div className="custom-scrollbar flex-1 overflow-y-auto p-5 pr-4">
-            {filteredUpdates.length === 0 ? (
+            {filteredRecentUpdates.length === 0 ? (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/60 p-6 text-sm text-slate-300">
                 No updates match the current filters.
               </div>
             ) : (
               <ul className="flex flex-col gap-3">
-                {filteredUpdates.map((update) => (
+                {filteredRecentUpdates.map((update) => (
                   <UpdateRow
                     update={update}
                     key={`${update.prefix}-${update.timestamp}-${update.kind}`}

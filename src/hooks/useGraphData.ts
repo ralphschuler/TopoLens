@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { GraphPayload, GraphWorkerCommand, GraphWorkerEvent } from "../workers/messages";
 import type { RipeUpdate } from "../utils/ris";
 
@@ -9,21 +9,54 @@ interface GraphDataResult {
 }
 
 const EMPTY_GRAPH: GraphPayload = { nodes: [], links: [] };
+const GRAPH_BUILD_INTERVAL_MS = 1500;
 
 export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
   const workerRef = useRef<Worker | null>(null);
   const latestUpdatesRef = useRef<RipeUpdate[]>(updates);
   const requestCounterRef = useRef(0);
   const latestRequestRef = useRef(0);
+  const scheduledBuildRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [graph, setGraph] = useState<GraphPayload>(EMPTY_GRAPH);
   const [isComputing, setIsComputing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nextRequestId = () => {
+  const clearScheduledBuild = useCallback(() => {
+    if (scheduledBuildRef.current !== null) {
+      clearTimeout(scheduledBuildRef.current);
+      scheduledBuildRef.current = null;
+    }
+  }, []);
+
+  const nextRequestId = useCallback(() => {
     requestCounterRef.current += 1;
     latestRequestRef.current = requestCounterRef.current;
     return requestCounterRef.current;
-  };
+  }, []);
+
+  const sendGraphCommand = useCallback(
+    (updatesToSend: RipeUpdate[]) => {
+      const worker = workerRef.current;
+      if (!worker) {
+        setIsComputing(false);
+        return;
+      }
+
+      const requestId = nextRequestId();
+      if (updatesToSend.length === 0) {
+        setGraph(EMPTY_GRAPH);
+        setIsComputing(false);
+        const command: GraphWorkerCommand = { type: "reset", requestId };
+        worker.postMessage(command);
+        return;
+      }
+
+      setIsComputing(true);
+      const command: GraphWorkerCommand = { type: "build", updates: updatesToSend, requestId };
+      worker.postMessage(command);
+    },
+    [nextRequestId],
+  );
 
   useEffect(() => {
     latestUpdatesRef.current = updates;
@@ -32,19 +65,24 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
       setIsComputing(false);
       return;
     }
+
     if (updates.length === 0) {
-      setGraph(EMPTY_GRAPH);
-      setIsComputing(false);
-      const requestId = nextRequestId();
-      const command: GraphWorkerCommand = { type: "reset", requestId };
-      worker.postMessage(command);
+      clearScheduledBuild();
+      sendGraphCommand([]);
       return;
     }
+
     setIsComputing(true);
-    const requestId = nextRequestId();
-    const command: GraphWorkerCommand = { type: "build", updates, requestId };
-    worker.postMessage(command);
-  }, [updates]);
+
+    if (scheduledBuildRef.current !== null) {
+      return;
+    }
+
+    scheduledBuildRef.current = setTimeout(() => {
+      scheduledBuildRef.current = null;
+      sendGraphCommand(latestUpdatesRef.current);
+    }, GRAPH_BUILD_INTERVAL_MS);
+  }, [sendGraphCommand, updates, clearScheduledBuild]);
 
   useEffect(() => {
     if (typeof Worker === "undefined") {
@@ -99,12 +137,9 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
 
     const initialUpdates = latestUpdatesRef.current;
     if (initialUpdates.length > 0) {
-      setIsComputing(true);
-      const requestId = nextRequestId();
-      worker.postMessage({ type: "build", updates: initialUpdates, requestId });
+      sendGraphCommand(initialUpdates);
     } else {
-      const requestId = nextRequestId();
-      worker.postMessage({ type: "reset", requestId });
+      sendGraphCommand([]);
     }
 
     return () => {
@@ -112,8 +147,16 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
       worker.removeEventListener("error", handleError);
       worker.terminate();
       workerRef.current = null;
+      clearScheduledBuild();
     };
-  }, []);
+  }, [clearScheduledBuild, sendGraphCommand]);
+
+  useEffect(
+    () => () => {
+      clearScheduledBuild();
+    },
+    [clearScheduledBuild],
+  );
 
   return { graph, isComputing, error };
 }

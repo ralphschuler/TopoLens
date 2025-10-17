@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FetchWorkerEvent, FetchWorkerCommand } from "../workers/messages";
 import type { RipeUpdate } from "../utils/ris";
 
@@ -11,12 +11,6 @@ export function useRipeRis(limit = 50) {
 
   const fetchWorkerRef = useRef<Worker | null>(null);
   const isMountedRef = useRef(true);
-  const limitRef = useRef(limit);
-
-  useEffect(() => {
-    limitRef.current = limit;
-    setUpdates((previous) => previous.slice(0, limit));
-  }, [limit]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -62,14 +56,7 @@ export function useRipeRis(limit = 50) {
         case "updates":
           if (!isMountedRef.current) return;
           if (message.updates.length > 0) {
-            setUpdates((previous) => {
-              const merged = [...message.updates, ...previous];
-              const max = limitRef.current;
-              if (merged.length <= max) {
-                return merged;
-              }
-              return merged.slice(0, max);
-            });
+            setUpdates((previous) => [...message.updates, ...previous]);
           }
           break;
         case "error":
@@ -121,5 +108,15 @@ export function useRipeRis(limit = 50) {
     setUpdates([]);
   }, []);
 
-  return { status, updates, error, reconnect, clearHistory };
+  const recentUpdates = useMemo(() => {
+    if (limit <= 0) {
+      return updates;
+    }
+    if (updates.length <= limit) {
+      return updates;
+    }
+    return updates.slice(0, limit);
+  }, [limit, updates]);
+
+  return { status, updates, recentUpdates, error, reconnect, clearHistory };
 }
