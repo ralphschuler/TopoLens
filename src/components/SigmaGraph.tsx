@@ -117,7 +117,7 @@ export function SigmaGraph({ nodes, links, className }: SigmaGraphProps): JSX.El
       const size = 6 + Math.log1p(node.count) * 2;
       graph.addNode(node.id, {
         label: node.label,
-        type: node.type,
+        category: node.type,
         count: node.count,
         size,
         color: NODE_COLORS[node.type],
