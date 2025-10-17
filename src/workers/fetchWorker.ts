@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { extractUpdates } from "../utils/ris";
 import type { FetchWorkerCommand, FetchWorkerEvent, WorkerConnectionState } from "./messages";
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
@@ -60,7 +61,16 @@ function handleSocketMessage(event: MessageEvent) {
   if (typeof event.data !== "string") {
     return;
   }
-  postMessage({ type: "message", payload: event.data });
+
+  try {
+    const parsed = JSON.parse(event.data);
+    const updates = extractUpdates(parsed);
+    const message: FetchWorkerEvent = { type: "updates", updates };
+    postMessage(message);
+  } catch (error) {
+    console.error("Failed to parse RIS payload", error);
+    postMessage({ type: "error", error: "Failed to parse update message" });
+  }
 }
 
 function connect() {

@@ -9,15 +9,9 @@ export type FetchWorkerCommand =
 
 export type FetchWorkerEvent =
   | { type: "status"; status: WorkerConnectionState }
-  | { type: "message"; payload: string }
+  | { type: "updates"; updates: RipeUpdate[] }
   | { type: "error"; error: string }
   | { type: "closed" };
-
-export type ParseWorkerCommand = { type: "parse"; payload: string };
-
-export type ParseWorkerEvent =
-  | { type: "updates"; updates: RipeUpdate[] }
-  | { type: "error"; error: string };
 
 export type GraphWorkerCommand =
   | { type: "build"; updates: RipeUpdate[]; requestId: number }
