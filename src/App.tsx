@@ -6,11 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import { Checkbox } from "./components/ui/checkbox";
 import { Input } from "./components/ui/input";
 import SigmaGraph from "./components/SigmaGraph";
-import type { PersistedUpdate } from "./db/indexedDb";
 import { useGraphData } from "./hooks/useGraphData";
 import { useRipeRis } from "./hooks/useRipeRis";
 import { cn } from "./lib/utils";
-import type { UpdateKind } from "./utils/ris";
+import type { RipeUpdate, UpdateKind } from "./utils/ris";
 
 type FieldKey =
   | "prefix"
@@ -28,7 +27,7 @@ interface FieldConfig {
   key: FieldKey;
   label: string;
   placeholder: string;
-  extractor: (update: PersistedUpdate) => Array<string | number | null | undefined>;
+  extractor: (update: RipeUpdate) => Array<string | number | null | undefined>;
 }
 
 function createEmptyFieldFilters(): Record<FieldKey, string> {
@@ -134,7 +133,7 @@ const FIELD_CONFIGS: FieldConfig[] = [
   },
 ];
 
-function UpdateRow({ update }: { update: PersistedUpdate }) {
+function UpdateRow({ update }: { update: RipeUpdate }) {
   const badgeVariant = update.kind === "announce" ? "success" : "destructive";
   return (
     <li className="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4 transition hover:border-mystic-400/40 hover:bg-slate-900/80">
@@ -200,12 +199,12 @@ export default function App(): JSX.Element {
 
   const { matcher: filterMatcher, errors: filterErrors } = useMemo(() => {
     const errors: string[] = [];
-    const matchers: Array<(update: PersistedUpdate) => boolean> = [];
+    const matchers: Array<(update: RipeUpdate) => boolean> = [];
 
     const compileMatcher = (
       label: string,
       value: string,
-      extractor: (update: PersistedUpdate) => Array<string | number | null | undefined>,
+      extractor: (update: RipeUpdate) => Array<string | number | null | undefined>,
     ) => {
       const trimmed = value.trim();
       if (!trimmed) return;
@@ -213,7 +212,7 @@ export default function App(): JSX.Element {
       if (useRegex) {
         try {
           const regex = new RegExp(trimmed, "i");
-          matchers.push((update: PersistedUpdate) => {
+          matchers.push((update: RipeUpdate) => {
             const candidates = extractor(update)
               .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
               .filter((entry): entry is string | number => entry !== null && entry !== undefined)
@@ -229,7 +228,7 @@ export default function App(): JSX.Element {
       }
 
       const lowered = trimmed.toLowerCase();
-      matchers.push((update: PersistedUpdate) => {
+      matchers.push((update: RipeUpdate) => {
         const candidates = extractor(update)
           .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
           .filter((entry): entry is string | number => entry !== null && entry !== undefined)
@@ -259,7 +258,7 @@ export default function App(): JSX.Element {
       compileMatcher(field.label, fieldFilters[field.key], field.extractor);
     }
 
-    const matcher = (update: PersistedUpdate) => {
+    const matcher = (update: RipeUpdate) => {
       if (!kindFilters[update.kind]) {
         return false;
       }

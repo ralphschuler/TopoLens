@@ -1,4 +1,3 @@
-import type { PersistedUpdate } from "../db/indexedDb";
 import type { RipeUpdate, UpdateKind } from "../utils/ris";
 
 export type WorkerConnectionState = "connecting" | "connected" | "error";
@@ -21,7 +20,7 @@ export type ParseWorkerEvent =
   | { type: "error"; error: string };
 
 export type GraphWorkerCommand =
-  | { type: "build"; updates: PersistedUpdate[]; requestId: number }
+  | { type: "build"; updates: RipeUpdate[]; requestId: number }
   | { type: "reset"; requestId: number };
 
 export interface GraphNodePayload {

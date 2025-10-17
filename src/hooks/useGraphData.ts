@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { PersistedUpdate } from "../db/indexedDb";
 import type { GraphPayload, GraphWorkerCommand, GraphWorkerEvent } from "../workers/messages";
+import type { RipeUpdate } from "../utils/ris";
 
 interface GraphDataResult {
   graph: GraphPayload;
@@ -9,9 +9,9 @@ interface GraphDataResult {
 
 const EMPTY_GRAPH: GraphPayload = { nodes: [], links: [] };
 
-export function useGraphData(updates: PersistedUpdate[]): GraphDataResult {
+export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
   const workerRef = useRef<Worker | null>(null);
-  const latestUpdatesRef = useRef<PersistedUpdate[]>(updates);
+  const latestUpdatesRef = useRef<RipeUpdate[]>(updates);
   const requestCounterRef = useRef(0);
   const latestRequestRef = useRef(0);
   const [graph, setGraph] = useState<GraphPayload>(EMPTY_GRAPH);
