@@ -186,7 +186,7 @@ function UpdateRow({ update }: { update: RipeUpdate }) {
 export default function App(): JSX.Element {
   const { status, updates, error, reconnect, clearHistory } = useRipeRis(50);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [isLogsCollapsed, setIsLogsCollapsed] = useState(false);
+  const [isLogsOpen, setIsLogsOpen] = useState(true);
   const [globalQuery, setGlobalQuery] = useState("");
   const [useRegex, setUseRegex] = useState(false);
   const [fieldFilters, setFieldFilters] = useState<Record<FieldKey, string>>(createEmptyFieldFilters);
@@ -331,91 +331,95 @@ export default function App(): JSX.Element {
 
   return (
     <main className="relative min-h-screen overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 -z-20 bg-mystic-overlay" />
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-mystic-grid opacity-25" />
+      <div className="pointer-events-none absolute inset-0 -z-40 bg-mystic-overlay" />
+      <div className="pointer-events-none absolute inset-0 -z-30 bg-mystic-grid opacity-25" />
       {isFiltersOpen && (
         <button
           type="button"
           aria-label="Close filters"
           onClick={closeOverlays}
-          className="fixed inset-0 z-30 bg-slate-900/60 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm"
         />
       )}
 
-      <div className="container relative z-40 flex min-h-screen flex-col gap-8 py-12">
-        <Card className="relative overflow-hidden border-slate-800/40 bg-slate-900/60">
-          <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-mystic-500/15 via-transparent to-slate-900/0" />
-          <CardHeader className="gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300/80">
-                <Badge variant={statusBadgeVariant}>{statusLabel}</Badge>
-                <span>{statusHelper}</span>
+      <div className="relative z-0 min-h-screen">
+        <div className="absolute inset-0 -z-20">
+          <SigmaGraph nodes={graphData.nodes} links={graphData.links} className="h-full w-full" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-950/70 via-slate-950/40 to-slate-950/80" />
+        </div>
+
+        {totalNodes === 0 && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
+            <div className="rounded-2xl border border-slate-800/60 bg-slate-900/80 px-5 py-4 text-sm text-slate-200">
+              {isGraphComputing ? "Building network view…" : "No routes available for the current filters."}
+            </div>
+          </div>
+        )}
+
+        <div className="relative z-30 mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10">
+          <Card className="relative overflow-hidden border-slate-800/40 bg-slate-900/75 backdrop-blur">
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-mystic-500/20 via-transparent to-slate-900/0" />
+            <CardHeader className="gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300/80">
+                  <Badge variant={statusBadgeVariant}>{statusLabel}</Badge>
+                  <span>{statusHelper}</span>
+                </div>
+                <div>
+                  <CardTitle className="text-3xl text-white">TopoLens</CardTitle>
+                  <CardDescription className="max-w-xl text-base text-slate-300">
+                    Observe global BGP relationships in near real-time through a mystic violet lens. Parsed updates are persisted locally for replay and deeper exploration.
+                  </CardDescription>
+                </div>
+                {error && <p className="text-sm text-rose-300">{error}</p>}
               </div>
-              <div>
-                <CardTitle className="text-3xl text-white">TopoLens</CardTitle>
-                <CardDescription className="max-w-xl text-base text-slate-300">
-                  Observe global BGP relationships in near real-time through a mystic violet lens. Parsed updates are persisted locally for replay and deeper exploration.
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="outline" onClick={() => setIsFiltersOpen((value) => !value)}>
+                  {isFiltersOpen ? "Hide filters" : "Show filters"}
+                  {activeFilterCount > 0 && (
+                    <span className="ml-2 inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded-full bg-mystic-500/20 px-2 text-xs text-mystic-100">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsLogsOpen((value) => !value)}
+                  aria-expanded={isLogsOpen}
+                  aria-controls="recent-updates-drawer"
+                >
+                  {isLogsOpen ? "Hide logs" : "Show logs"}
+                </Button>
+                <Button variant="outline" onClick={reconnect}>
+                  Reconnect
+                </Button>
+                <Button variant="ghost" onClick={clearHistory}>
+                  Clear stored updates
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
+
+          <Card className="relative border-slate-800/40 bg-slate-900/70 backdrop-blur">
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-mystic-500/15 via-transparent to-slate-900/0" />
+            <CardHeader className="flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-2xl text-white">Live connectivity map</CardTitle>
+                <CardDescription className="text-slate-300/80">
+                  {filteredUpdates.length} visible update{filteredUpdates.length === 1 ? "" : "s"}
                 </CardDescription>
               </div>
-              {error && <p className="text-sm text-rose-300">{error}</p>}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button variant="outline" onClick={() => setIsFiltersOpen((value) => !value)}>
-                {isFiltersOpen ? "Hide filters" : "Show filters"}
-                {activeFilterCount > 0 && (
-                  <span className="ml-2 inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded-full bg-mystic-500/20 px-2 text-xs text-mystic-100">
-                    {activeFilterCount}
-                  </span>
+              <div className="flex flex-col items-start gap-2 text-xs text-slate-300/70 md:items-end">
+                {isGraphComputing && (
+                  <Badge className="bg-mystic-500/20 text-mystic-100">Updating graph…</Badge>
                 )}
-              </Button>
-              <Button variant="outline" onClick={() => setIsLogsCollapsed((value) => !value)}>
-                {isLogsCollapsed ? "Expand logs" : "Collapse logs"}
-              </Button>
-              <Button variant="outline" onClick={reconnect}>
-                Reconnect
-              </Button>
-              <Button variant="ghost" onClick={clearHistory}>
-                Clear stored updates
-              </Button>
-            </div>
-          </CardHeader>
-        </Card>
-
-        <Card className="relative flex min-h-[520px] flex-col border-slate-800/40 bg-slate-900/60">
-          <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-mystic-500/20 via-transparent to-slate-900/0" />
-          <CardHeader className="flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <CardTitle className="text-2xl text-white">Live connectivity map</CardTitle>
-              <CardDescription className="text-slate-300/80">
-                {filteredUpdates.length} visible update{filteredUpdates.length === 1 ? "" : "s"}
-              </CardDescription>
-            </div>
-            <div className="flex flex-col items-start gap-2 text-xs text-slate-300/70 md:items-end">
-              {isGraphComputing && (
-                <Badge className="bg-mystic-500/20 text-mystic-100">Updating graph…</Badge>
-              )}
-              <div className="flex items-center gap-3">
-                <span>Nodes: {totalNodes}</span>
-                <span>Connections: {totalLinks}</span>
+                <div className="flex items-center gap-3">
+                  <span>Nodes: {totalNodes}</span>
+                  <span>Connections: {totalLinks}</span>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-4">
-            <div className="relative flex flex-1 overflow-hidden rounded-3xl border border-slate-800/50 bg-slate-950/60">
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-mystic-500/20 via-transparent to-slate-950/80" />
-              {isGraphComputing && totalNodes === 0 ? (
-                <div className="relative z-10 flex flex-1 items-center justify-center p-6 text-sm text-slate-300">
-                  Building network view…
-                </div>
-              ) : totalNodes === 0 ? (
-                <div className="relative z-10 flex flex-1 items-center justify-center p-6 text-sm text-slate-300">
-                  No routes available for the current filters.
-                </div>
-              ) : (
-                <SigmaGraph nodes={graphData.nodes} links={graphData.links} />
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300/80">
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-4 text-xs text-slate-300/80">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#c4b5fd]" />
                 <span>Peers</span>
@@ -436,48 +440,55 @@ export default function App(): JSX.Element {
                 <span className="h-2 w-6 rounded-full bg-gradient-to-r from-rose-400/70 to-rose-500/60" />
                 <span>Withdraw link</span>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="flex flex-col border-slate-800/40 bg-slate-900/70">
-          <CardHeader className="flex-row items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-xl text-white">Recent updates</CardTitle>
-              <CardDescription className="text-slate-300/80">
-                {filteredUpdates.length === 0 ? "No updates match the current filters." : "Latest persisted BGP events"}
-              </CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setIsLogsCollapsed((value) => !value)}>
-              {isLogsCollapsed ? "Expand" : "Collapse"}
-            </Button>
-          </CardHeader>
-          {!isLogsCollapsed && (
-            <CardContent className="flex-1 overflow-hidden">
-              {filteredUpdates.length === 0 ? (
-                <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-700/50 bg-slate-900/60 p-6 text-sm text-slate-300">
-                  No updates match the current filters.
-                </div>
-              ) : (
-                <div className="custom-scrollbar h-[320px] overflow-y-auto pr-2">
-                  <ul className="flex flex-col gap-3">
-                    {filteredUpdates.map((update) => (
-                      <UpdateRow
-                        update={update}
-                        key={update.id ?? `${update.prefix}-${update.timestamp}-${update.kind}`}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              )}
             </CardContent>
-          )}
-        </Card>
+          </Card>
+        </div>
       </div>
+
+      <aside
+        id="recent-updates-drawer"
+        className={cn(
+          "fixed right-0 top-0 z-50 h-full w-full max-w-md transform transition-transform duration-300 ease-in-out",
+          isLogsOpen ? "translate-x-0" : "translate-x-full",
+        )}
+        aria-hidden={!isLogsOpen}
+      >
+        <div className="flex h-full flex-col border-l border-slate-800/60 bg-slate-950/85 backdrop-blur">
+          <div className="flex items-start justify-between border-b border-slate-800/60 p-5">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Recent updates</h2>
+              <p className="text-xs text-slate-300/80">
+                {filteredUpdates.length === 0
+                  ? "No updates match the current filters."
+                  : "Latest persisted BGP events"}
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setIsLogsOpen(false)}>
+              Close
+            </Button>
+          </div>
+          <div className="custom-scrollbar flex-1 overflow-y-auto p-5 pr-4">
+            {filteredUpdates.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-700/60 bg-slate-900/60 p-6 text-sm text-slate-300">
+                No updates match the current filters.
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {filteredUpdates.map((update) => (
+                  <UpdateRow
+                    update={update}
+                    key={update.id ?? `${update.prefix}-${update.timestamp}-${update.kind}`}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </aside>
 
       <div
         className={cn(
-          "fixed left-1/2 top-12 z-40 w-[min(520px,92%)] -translate-x-1/2 transform transition-all duration-300",
+          "fixed left-1/2 top-12 z-60 w-[min(520px,92%)] -translate-x-1/2 transform transition-all duration-300",
           isFiltersOpen ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-6 opacity-0",
         )}
       >
