@@ -1,6 +1,6 @@
 # TopoLens
 
-TopoLens is now a static web application built with [Vite](https://vitejs.dev/) that visualises live BGP activity using the [RIPE RIS Live](https://ris-live.ripe.net/) WebSocket feed. The browser stores every update locally in IndexedDB so you can reconnect or refresh without losing the most recent announcements.
+TopoLens is now a static web application built with [Vite](https://vitejs.dev/) that visualises live BGP activity using the [RIPE RIS Live](https://ris-live.ripe.net/) WebSocket feed. The browser keeps a rolling in-memory list of the most recent announcements for quick exploration during your session.
 
 ## Getting started
 
@@ -22,7 +22,7 @@ npm run preview
 
 * A WebSocket connection is opened to `wss://ris-live.ripe.net/v1/ws/` and the app subscribes to the `rrc00.ripe.net` stream.
 * Incoming messages are normalised into announcement and withdrawal records.
-* Updates are persisted in IndexedDB so that the most recent entries remain available between refreshes.
+* A rolling in-memory buffer keeps the most recent entries available while the page remains open.
 * The UI presents the latest events with key metadata such as AS path, peer, origin AS, and next hop when available.
 
 ## Testing

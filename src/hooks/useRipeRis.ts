@@ -21,9 +21,30 @@ export function useRipeRis(limit = 50) {
   useEffect(() => {
     isMountedRef.current = true;
 
-    const fetchWorker = new Worker(new URL("../workers/fetchWorker.ts", import.meta.url), {
-      type: "module",
-    });
+    if (typeof Worker === "undefined") {
+      setStatus("error");
+      setError("Web Workers are not supported in this environment. Live updates are unavailable.");
+      return () => {
+        isMountedRef.current = false;
+      };
+    }
+
+    let fetchWorker: Worker;
+    try {
+      fetchWorker = new Worker(new URL("../workers/fetchWorker.ts", import.meta.url), {
+        type: "module",
+      });
+    } catch (workerError) {
+      const message =
+        workerError instanceof Error ? workerError.message : "Unknown error while starting the update worker.";
+      if (isMountedRef.current) {
+        setStatus("error");
+        setError(`Failed to start update stream: ${message}`);
+      }
+      return () => {
+        isMountedRef.current = false;
+      };
+    }
 
     fetchWorkerRef.current = fetchWorker;
 
@@ -54,13 +75,23 @@ export function useRipeRis(limit = 50) {
         case "error":
           if (!isMountedRef.current) return;
           setError(message.error);
+          setStatus("error");
           break;
         default:
           break;
       }
     };
 
+    const handleFetchError = (event: ErrorEvent) => {
+      if (!isMountedRef.current) return;
+      const details =
+        event.message || (event.error instanceof Error ? event.error.message : String(event.error ?? ""));
+      setError(`Update worker error: ${details || "Unknown error"}`);
+      setStatus("error");
+    };
+
     fetchWorker.addEventListener("message", handleFetchMessage);
+    fetchWorker.addEventListener("error", handleFetchError);
 
     const startCommand: FetchWorkerCommand = { type: "start" };
     fetchWorker.postMessage(startCommand);
@@ -68,6 +99,7 @@ export function useRipeRis(limit = 50) {
     return () => {
       isMountedRef.current = false;
       fetchWorker.removeEventListener("message", handleFetchMessage);
+      fetchWorker.removeEventListener("error", handleFetchError);
       fetchWorker.postMessage({ type: "stop" });
       fetchWorker.terminate();
       fetchWorkerRef.current = null;

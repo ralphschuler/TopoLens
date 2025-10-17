@@ -5,6 +5,7 @@ import type { RipeUpdate } from "../utils/ris";
 interface GraphDataResult {
   graph: GraphPayload;
   isComputing: boolean;
+  error: string | null;
 }
 
 const EMPTY_GRAPH: GraphPayload = { nodes: [], links: [] };
@@ -16,6 +17,7 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
   const latestRequestRef = useRef(0);
   const [graph, setGraph] = useState<GraphPayload>(EMPTY_GRAPH);
   const [isComputing, setIsComputing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const nextRequestId = () => {
     requestCounterRef.current += 1;
@@ -27,6 +29,7 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
     latestUpdatesRef.current = updates;
     const worker = workerRef.current;
     if (!worker) {
+      setIsComputing(false);
       return;
     }
     if (updates.length === 0) {
@@ -44,9 +47,32 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
   }, [updates]);
 
   useEffect(() => {
-    const worker = new Worker(new URL("../workers/graphWorker.ts", import.meta.url), {
-      type: "module",
-    });
+    if (typeof Worker === "undefined") {
+      setGraph(EMPTY_GRAPH);
+      setIsComputing(false);
+      setError("Web Workers are not supported. Graph view is unavailable in this environment.");
+      return () => {
+        workerRef.current = null;
+      };
+    }
+
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL("../workers/graphWorker.ts", import.meta.url), {
+        type: "module",
+      });
+    } catch (workerError) {
+      const message = workerError instanceof Error ? workerError.message : "Unknown error starting graph worker.";
+      setGraph(EMPTY_GRAPH);
+      setIsComputing(false);
+      setError(`Failed to start graph worker: ${message}`);
+      workerRef.current = null;
+      return () => {
+        workerRef.current = null;
+      };
+    }
+
+    setError(null);
     workerRef.current = worker;
 
     const handleMessage = (event: MessageEvent<GraphWorkerEvent>) => {
@@ -59,9 +85,17 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
       }
       setGraph(message.graph);
       setIsComputing(false);
+      setError(null);
+    };
+
+    const handleError = (event: ErrorEvent) => {
+      const details = event.message || (event.error instanceof Error ? event.error.message : String(event.error ?? ""));
+      setIsComputing(false);
+      setError(`Graph worker error: ${details || "Unknown error"}`);
     };
 
     worker.addEventListener("message", handleMessage);
+    worker.addEventListener("error", handleError);
 
     const initialUpdates = latestUpdatesRef.current;
     if (initialUpdates.length > 0) {
@@ -75,10 +109,11 @@ export function useGraphData(updates: RipeUpdate[]): GraphDataResult {
 
     return () => {
       worker.removeEventListener("message", handleMessage);
+      worker.removeEventListener("error", handleError);
       worker.terminate();
       workerRef.current = null;
     };
   }, []);
 
-  return { graph, isComputing };
+  return { graph, isComputing, error };
 }

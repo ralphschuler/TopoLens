@@ -278,7 +278,11 @@ export default function App(): JSX.Element {
     [filterMatcher, updates],
   );
 
-  const { graph: graphData, isComputing: isGraphComputing } = useGraphData(filteredUpdates);
+  const {
+    graph: graphData,
+    isComputing: isGraphComputing,
+    error: graphError,
+  } = useGraphData(filteredUpdates);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -368,7 +372,7 @@ export default function App(): JSX.Element {
                 <div>
                   <CardTitle className="text-3xl text-white">TopoLens</CardTitle>
                   <CardDescription className="max-w-xl text-base text-slate-300">
-                    Observe global BGP relationships in near real-time through a mystic violet lens. Parsed updates are persisted locally for replay and deeper exploration.
+                    Observe global BGP relationships in near real-time through a mystic violet lens. Recent updates stay in memory for quick exploration during your session.
                   </CardDescription>
                 </div>
                 {error && <p className="text-sm text-rose-300">{error}</p>}
@@ -394,7 +398,7 @@ export default function App(): JSX.Element {
                   Reconnect
                 </Button>
                 <Button variant="ghost" onClick={clearHistory}>
-                  Clear stored updates
+                  Clear recent updates
                 </Button>
               </div>
             </CardHeader>
@@ -408,6 +412,7 @@ export default function App(): JSX.Element {
                 <CardDescription className="text-slate-300/80">
                   {filteredUpdates.length} visible update{filteredUpdates.length === 1 ? "" : "s"}
                 </CardDescription>
+                {graphError && <p className="text-sm text-rose-300">{graphError}</p>}
               </div>
               <div className="flex flex-col items-start gap-2 text-xs text-slate-300/70 md:items-end">
                 {isGraphComputing && (
@@ -460,7 +465,7 @@ export default function App(): JSX.Element {
               <p className="text-xs text-slate-300/80">
                 {filteredUpdates.length === 0
                   ? "No updates match the current filters."
-                  : "Latest persisted BGP events"}
+                  : "Latest captured BGP events"}
               </p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setIsLogsOpen(false)}>
@@ -477,7 +482,7 @@ export default function App(): JSX.Element {
                 {filteredUpdates.map((update) => (
                   <UpdateRow
                     update={update}
-                    key={update.id ?? `${update.prefix}-${update.timestamp}-${update.kind}`}
+                    key={`${update.prefix}-${update.timestamp}-${update.kind}`}
                   />
                 ))}
               </ul>
