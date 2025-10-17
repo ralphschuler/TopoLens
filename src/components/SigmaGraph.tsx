@@ -40,23 +40,64 @@ export function SigmaGraph({ nodes, links, className }: SigmaGraphProps): JSX.El
     if (!container) return;
 
     const graph = graphRef.current;
-    const renderer = new Sigma(graph, container, {
-      renderLabels: true,
-      labelDensity: 0.7,
-      labelGridCellSize: 60,
-      allowInvalidContainer: false,
-    });
-    rendererRef.current = renderer;
+    let resizeObserver: ResizeObserver | null = null;
+    let resizeRetryId: number | null = null;
 
     const handleResize = () => {
-      renderer.refresh();
+      rendererRef.current?.refresh();
     };
 
-    window.addEventListener("resize", handleResize);
+    const initializeRenderer = () => {
+      const element = containerRef.current;
+      if (!element || rendererRef.current) return rendererRef.current !== null;
+      if (element.clientHeight === 0 || element.clientWidth === 0) return false;
+
+      const renderer = new Sigma(graph, element, {
+        renderLabels: true,
+        labelDensity: 0.7,
+        labelGridCellSize: 60,
+        allowInvalidContainer: false,
+      });
+
+      rendererRef.current = renderer;
+      renderer.refresh();
+      window.addEventListener("resize", handleResize);
+
+      return true;
+    };
+
+    if (!initializeRenderer()) {
+      if (typeof ResizeObserver !== "undefined") {
+        resizeObserver = new ResizeObserver(() => {
+          if (initializeRenderer()) {
+            resizeObserver?.disconnect();
+            resizeObserver = null;
+          }
+        });
+        resizeObserver.observe(container);
+      } else {
+        const attemptInitialization = () => {
+          if (initializeRenderer()) {
+            if (resizeRetryId !== null) {
+              cancelAnimationFrame(resizeRetryId);
+              resizeRetryId = null;
+            }
+            return;
+          }
+          resizeRetryId = requestAnimationFrame(attemptInitialization);
+        };
+
+        resizeRetryId = requestAnimationFrame(attemptInitialization);
+      }
+    }
 
     return () => {
+      resizeObserver?.disconnect();
+      if (resizeRetryId !== null) {
+        cancelAnimationFrame(resizeRetryId);
+      }
       window.removeEventListener("resize", handleResize);
-      renderer.kill();
+      rendererRef.current?.kill();
       rendererRef.current = null;
       graph.clear();
     };
