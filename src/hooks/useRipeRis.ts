@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ParseWorkerEvent, FetchWorkerEvent, FetchWorkerCommand } from "../workers/messages";
+import type { FetchWorkerEvent, FetchWorkerCommand } from "../workers/messages";
 import type { RipeUpdate } from "../utils/ris";
 
 export type ConnectionState = "connecting" | "connected" | "error";
@@ -24,9 +24,6 @@ export function useRipeRis(limit = 50) {
     const fetchWorker = new Worker(new URL("../workers/fetchWorker.ts", import.meta.url), {
       type: "module",
     });
-    const parseWorker = new Worker(new URL("../workers/parseWorker.ts", import.meta.url), {
-      type: "module",
-    });
 
     fetchWorkerRef.current = fetchWorker;
 
@@ -41,24 +38,6 @@ export function useRipeRis(limit = 50) {
             setError(null);
           }
           break;
-        case "message":
-          parseWorker.postMessage({ type: "parse", payload: message.payload });
-          break;
-        case "error":
-          if (!isMountedRef.current) return;
-          setError(message.error);
-          break;
-        case "closed":
-          break;
-        default:
-          break;
-      }
-    };
-
-    const handleParseMessage = (event: MessageEvent<ParseWorkerEvent>) => {
-      const message = event.data;
-      if (!message) return;
-      switch (message.type) {
         case "updates":
           if (!isMountedRef.current) return;
           if (message.updates.length > 0) {
@@ -82,7 +61,6 @@ export function useRipeRis(limit = 50) {
     };
 
     fetchWorker.addEventListener("message", handleFetchMessage);
-    parseWorker.addEventListener("message", handleParseMessage);
 
     const startCommand: FetchWorkerCommand = { type: "start" };
     fetchWorker.postMessage(startCommand);
@@ -90,10 +68,8 @@ export function useRipeRis(limit = 50) {
     return () => {
       isMountedRef.current = false;
       fetchWorker.removeEventListener("message", handleFetchMessage);
-      parseWorker.removeEventListener("message", handleParseMessage);
       fetchWorker.postMessage({ type: "stop" });
       fetchWorker.terminate();
-      parseWorker.terminate();
       fetchWorkerRef.current = null;
     };
   }, []);
