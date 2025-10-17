@@ -1,23 +1,50 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import ForceGraph2D, {
-  type ForceGraphMethods,
-  type LinkObject,
-  type NodeObject,
-} from "react-force-graph-2d";
-import { useRipeRis } from "./hooks/useRipeRis";
+import { useMemo, useState } from "react";
+
+import { Button } from "./components/ui/button";
+import { Badge } from "./components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
+import { Checkbox } from "./components/ui/checkbox";
+import { Input } from "./components/ui/input";
+import SigmaGraph from "./components/SigmaGraph";
 import type { PersistedUpdate } from "./db/indexedDb";
+import { useGraphData } from "./hooks/useGraphData";
+import { useRipeRis } from "./hooks/useRipeRis";
+import { cn } from "./lib/utils";
+import type { UpdateKind } from "./utils/ris";
 
-type GraphNodeExtra = {
+type FieldKey =
+  | "prefix"
+  | "peer"
+  | "peerAsn"
+  | "originAs"
+  | "nextHop"
+  | "asPath"
+  | "host"
+  | "timestamp"
+  | "receivedAt"
+  | "kind";
+
+interface FieldConfig {
+  key: FieldKey;
   label: string;
-  type: "peer" | "prefix" | "origin";
-};
+  placeholder: string;
+  extractor: (update: PersistedUpdate) => Array<string | number | null | undefined>;
+}
 
-type GraphLinkExtra = {
-  kind: PersistedUpdate["kind"];
-};
-
-type GraphNode = NodeObject<GraphNodeExtra>;
-type GraphLink = LinkObject<GraphNodeExtra, GraphLinkExtra>;
+function createEmptyFieldFilters(): Record<FieldKey, string> {
+  return {
+    prefix: "",
+    peer: "",
+    peerAsn: "",
+    originAs: "",
+    nextHop: "",
+    asPath: "",
+    host: "",
+    timestamp: "",
+    receivedAt: "",
+    kind: "",
+  };
+}
 
 function formatTimestamp(ts: number): string {
   return new Date(ts).toLocaleTimeString();
@@ -34,28 +61,124 @@ function formatRelative(ts: number): string {
   return `${hours}h ago`;
 }
 
+const FIELD_CONFIGS: FieldConfig[] = [
+  {
+    key: "prefix",
+    label: "Prefix",
+    placeholder: "e.g. 192.0.2.0/24",
+    extractor: (update) => [update.prefix],
+  },
+  {
+    key: "peer",
+    label: "BGP client (peer)",
+    placeholder: "e.g. 198.51.100.1",
+    extractor: (update) => [update.peer],
+  },
+  {
+    key: "peerAsn",
+    label: "Peer ASN",
+    placeholder: "e.g. 64496",
+    extractor: (update) =>
+      typeof update.peerAsn === "number" ? [update.peerAsn, `AS${update.peerAsn}`] : [],
+  },
+  {
+    key: "originAs",
+    label: "Origin ASN",
+    placeholder: "e.g. 13335",
+    extractor: (update) =>
+      typeof update.originAs === "number" && Number.isFinite(update.originAs)
+        ? [update.originAs, `AS${update.originAs}`]
+        : [],
+  },
+  {
+    key: "nextHop",
+    label: "Next hop",
+    placeholder: "e.g. 203.0.113.10",
+    extractor: (update) => [update.nextHop ?? null],
+  },
+  {
+    key: "asPath",
+    label: "AS path",
+    placeholder: "e.g. 64512 64513",
+    extractor: (update) => [update.asPath ?? null],
+  },
+  {
+    key: "host",
+    label: "Collector host",
+    placeholder: "e.g. rrc00",
+    extractor: (update) => [update.host ?? null],
+  },
+  {
+    key: "timestamp",
+    label: "Announcement timestamp",
+    placeholder: "e.g. 2024-05-01",
+    extractor: (update) => {
+      const date = new Date(update.timestamp);
+      return [update.timestamp, date.toISOString(), date.toLocaleString()];
+    },
+  },
+  {
+    key: "receivedAt",
+    label: "Received at",
+    placeholder: "e.g. 5m ago",
+    extractor: (update) => {
+      const date = new Date(update.receivedAt);
+      return [update.receivedAt, date.toISOString(), date.toLocaleString(), formatRelative(update.receivedAt)];
+    },
+  },
+  {
+    key: "kind",
+    label: "Message kind",
+    placeholder: "announce | withdraw",
+    extractor: (update) => [update.kind],
+  },
+];
+
 function UpdateRow({ update }: { update: PersistedUpdate }) {
+  const badgeVariant = update.kind === "announce" ? "success" : "destructive";
   return (
-    <li className="update-item">
-      <div className="update-title">
-        {update.kind === "announce" ? "Announce" : "Withdraw"} {update.prefix}
+    <li className="rounded-2xl border border-slate-800/60 bg-slate-900/60 p-4 transition hover:border-mystic-400/40 hover:bg-slate-900/80">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-100">
+          {update.kind === "announce" ? "Announce" : "Withdraw"} {update.prefix}
+        </p>
+        <Badge variant={badgeVariant} className="capitalize">
+          {update.kind}
+        </Badge>
       </div>
-      <div className="update-meta">
-        <span>Peer: {update.peer}</span>
-        {typeof update.peerAsn === "number" && <span>AS{update.peerAsn}</span>}
-        {typeof update.originAs === "number" && <span>Origin AS{update.originAs}</span>}
-        <span>{formatTimestamp(update.timestamp)}</span>
-        <span>{formatRelative(update.receivedAt)}</span>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-400">
+        <span>
+          Peer: <span className="text-slate-200">{update.peer}</span>
+        </span>
+        {update.host && (
+          <span>
+            Collector: <span className="text-slate-200">{update.host}</span>
+          </span>
+        )}
+        {typeof update.peerAsn === "number" && (
+          <span>
+            Peer ASN: <span className="text-slate-200">AS{update.peerAsn}</span>
+          </span>
+        )}
+        {typeof update.originAs === "number" && (
+          <span>
+            Origin: <span className="text-slate-200">AS{update.originAs}</span>
+          </span>
+        )}
+        <span>
+          At <span className="text-slate-200">{formatTimestamp(update.timestamp)}</span>
+        </span>
+        <span className="text-slate-300/70">{formatRelative(update.receivedAt)}</span>
       </div>
       {update.asPath && (
-        <div className="update-meta">
-          <span>AS Path: {update.asPath}</span>
-        </div>
+        <p className="mt-3 text-xs text-slate-300/80">
+          <span className="font-medium text-slate-200">AS Path:</span> {update.asPath}
+        </p>
       )}
       {update.nextHop && (
-        <div className="update-meta">
-          <span>Next Hop: {update.nextHop}</span>
-        </div>
+        <p className="mt-1 text-xs text-slate-300/80">
+          <span className="font-medium text-slate-200">Next Hop:</span> {update.nextHop}
+        </p>
       )}
     </li>
   );
@@ -64,137 +187,121 @@ function UpdateRow({ update }: { update: PersistedUpdate }) {
 export default function App(): JSX.Element {
   const { status, updates, error, reconnect, clearHistory } = useRipeRis(50);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [isLogsOpen, setIsLogsOpen] = useState(false);
-  const [filterQuery, setFilterQuery] = useState("");
+  const [isLogsCollapsed, setIsLogsCollapsed] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState("");
   const [useRegex, setUseRegex] = useState(false);
-  const [graphSize, setGraphSize] = useState({ width: 0, height: 0 });
-  const graphContainerRef = useRef<HTMLDivElement | null>(null);
-  const graphRef = useRef<ForceGraphMethods<GraphNodeExtra, GraphLinkExtra>>();
-  const hasFitGraphRef = useRef(false);
+  const [fieldFilters, setFieldFilters] = useState<Record<FieldKey, string>>(createEmptyFieldFilters);
+  const [kindFilters, setKindFilters] = useState<Record<UpdateKind, boolean>>({
+    announce: true,
+    withdraw: true,
+  });
+  const [showIpv4, setShowIpv4] = useState(true);
+  const [showIpv6, setShowIpv6] = useState(true);
 
-  useEffect(() => {
-    const node = graphContainerRef.current;
-    if (!node) return;
-    const updateSize = () => {
-      setGraphSize({ width: node.clientWidth, height: node.clientHeight });
-    };
-    updateSize();
-    if (typeof ResizeObserver === "undefined") {
-      if (typeof window !== "undefined") {
-        window.addEventListener("resize", updateSize);
-        return () => window.removeEventListener("resize", updateSize);
+  const { matcher: filterMatcher, errors: filterErrors } = useMemo(() => {
+    const errors: string[] = [];
+    const matchers: Array<(update: PersistedUpdate) => boolean> = [];
+
+    const compileMatcher = (
+      label: string,
+      value: string,
+      extractor: (update: PersistedUpdate) => Array<string | number | null | undefined>,
+    ) => {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+
+      if (useRegex) {
+        try {
+          const regex = new RegExp(trimmed, "i");
+          matchers.push((update: PersistedUpdate) => {
+            const candidates = extractor(update)
+              .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+              .filter((entry): entry is string | number => entry !== null && entry !== undefined)
+              .map((entry) => String(entry));
+            if (candidates.length === 0) return false;
+            return candidates.some((candidate) => regex.test(candidate));
+          });
+        } catch (regexError) {
+          errors.push(`${label}: ${regexError instanceof Error ? regexError.message : "Invalid regular expression"}`);
+          matchers.push(() => false);
+        }
+        return;
       }
-      return;
-    }
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
 
-  const { matcher: filterMatcher, error: filterError } = useMemo(() => {
-    const trimmed = filterQuery.trim();
-    if (!trimmed) {
-      return { matcher: () => true, error: null as string | null };
-    }
-
-    if (useRegex) {
-      try {
-        const regex = new RegExp(trimmed, "i");
-        return {
-          matcher: (update: PersistedUpdate) =>
-            [
-              update.prefix,
-              update.peer,
-              update.nextHop,
-              update.asPath,
-              update.kind,
-              typeof update.originAs === "number" ? `AS${update.originAs}` : null,
-              typeof update.peerAsn === "number" ? `AS${update.peerAsn}` : null,
-            ]
-              .filter((value): value is string => Boolean(value))
-              .some((value) => regex.test(value)),
-          error: null,
-        };
-      } catch (regexError) {
-        return {
-          matcher: () => false,
-          error: regexError instanceof Error ? regexError.message : "Invalid regular expression",
-        };
-      }
-    }
-
-    const lowered = trimmed.toLowerCase();
-    return {
-      matcher: (update: PersistedUpdate) =>
-        [
-          update.prefix,
-          update.peer,
-          update.nextHop,
-          update.asPath,
-          update.kind,
-          typeof update.originAs === "number" ? `AS${update.originAs}` : null,
-          typeof update.peerAsn === "number" ? `AS${update.peerAsn}` : null,
-        ]
-          .filter((value): value is string => Boolean(value))
-          .some((value) => value.toLowerCase().includes(lowered)),
-      error: null,
+      const lowered = trimmed.toLowerCase();
+      matchers.push((update: PersistedUpdate) => {
+        const candidates = extractor(update)
+          .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+          .filter((entry): entry is string | number => entry !== null && entry !== undefined)
+          .map((entry) => String(entry).toLowerCase());
+        if (candidates.length === 0) return false;
+        return candidates.some((candidate) => candidate.includes(lowered));
+      });
     };
-  }, [filterQuery, useRegex]);
+
+    const globalTrim = globalQuery.trim();
+    if (globalTrim) {
+      compileMatcher("Global", globalTrim, (update) => [
+        update.prefix,
+        update.peer,
+        update.host,
+        update.nextHop,
+        update.asPath,
+        update.kind,
+        typeof update.peerAsn === "number" ? update.peerAsn : null,
+        typeof update.peerAsn === "number" ? `AS${update.peerAsn}` : null,
+        typeof update.originAs === "number" ? update.originAs : null,
+        typeof update.originAs === "number" ? `AS${update.originAs}` : null,
+      ]);
+    }
+
+    for (const field of FIELD_CONFIGS) {
+      compileMatcher(field.label, fieldFilters[field.key], field.extractor);
+    }
+
+    const matcher = (update: PersistedUpdate) => {
+      if (!kindFilters[update.kind]) {
+        return false;
+      }
+
+      const isIpv6Prefix = update.prefix.includes(":");
+      if (isIpv6Prefix && !showIpv6) return false;
+      if (!isIpv6Prefix && !showIpv4) return false;
+
+      return matchers.every((fn) => fn(update));
+    };
+
+    return { matcher, errors };
+  }, [fieldFilters, globalQuery, kindFilters, showIpv4, showIpv6, useRegex]);
 
   const filteredUpdates = useMemo(
     () => updates.filter((update) => filterMatcher(update)),
     [filterMatcher, updates],
   );
 
-  const graphData = useMemo((): { nodes: GraphNode[]; links: GraphLink[] } => {
-    const nodes = new Map<string, GraphNode>();
-    const links: GraphLink[] = [];
+  const { graph: graphData, isComputing: isGraphComputing } = useGraphData(filteredUpdates);
 
-    for (const update of filteredUpdates) {
-      const peerId = `peer:${update.peer}`;
-      if (!nodes.has(peerId)) {
-        nodes.set(peerId, { id: peerId, label: update.peer, type: "peer" });
-      }
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (globalQuery.trim()) count += 1;
+    count += Object.values(fieldFilters).filter((value) => value.trim()).length;
+    if (!kindFilters.announce || !kindFilters.withdraw) count += 1;
+    if (!showIpv4 || !showIpv6) count += 1;
+    return count;
+  }, [fieldFilters, globalQuery, kindFilters, showIpv4, showIpv6]);
 
-      const prefixId = `prefix:${update.prefix}`;
-      if (!nodes.has(prefixId)) {
-        nodes.set(prefixId, { id: prefixId, label: update.prefix, type: "prefix" });
-      }
+  const handleFieldFilterChange = (key: FieldKey, value: string) => {
+    setFieldFilters((previous) => ({ ...previous, [key]: value }));
+  };
 
-      links.push({ source: peerId, target: prefixId, kind: update.kind });
-
-      if (typeof update.originAs === "number") {
-        const originId = `origin:${update.originAs}`;
-        if (!nodes.has(originId)) {
-          nodes.set(originId, { id: originId, label: `AS${update.originAs}`, type: "origin" });
-        }
-        links.push({ source: originId, target: prefixId, kind: update.kind });
-      }
-    }
-
-    return { nodes: Array.from(nodes.values()), links };
-  }, [filteredUpdates]);
-
-  useEffect(() => {
-    if (!graphRef.current || graphData.nodes.length === 0 || graphSize.width === 0 || graphSize.height === 0) {
-      return;
-    }
-
-    if (!hasFitGraphRef.current) {
-      graphRef.current.zoomToFit(400, 50);
-      hasFitGraphRef.current = true;
-    }
-  }, [graphData.nodes.length, graphSize.height, graphSize.width]);
-
-  useEffect(() => {
-    if (!graphRef.current) return;
-    if (graphData.nodes.length === 0) return;
-    graphRef.current.d3ReheatSimulation();
-  }, [graphData.links.length, graphData.nodes.length]);
-
-  useEffect(() => {
-    hasFitGraphRef.current = false;
-  }, [filterQuery, isFiltersOpen, useRegex]);
+  const resetFilters = () => {
+    setGlobalQuery("");
+    setFieldFilters(createEmptyFieldFilters());
+    setKindFilters({ announce: true, withdraw: true });
+    setShowIpv4(true);
+    setShowIpv6(true);
+    setUseRegex(false);
+  };
 
   const statusLabel = useMemo(() => {
     switch (status) {
@@ -208,153 +315,276 @@ export default function App(): JSX.Element {
     }
   }, [status]);
 
+  const statusBadgeVariant = status === "connected" ? "success" : status === "connecting" ? "warning" : "destructive";
+  const statusHelper =
+    status === "connected"
+      ? "Streaming live BGP announcements"
+      : status === "connecting"
+        ? "Negotiating websocket session"
+        : "Tap reconnect to retry the stream";
+
+  const closeOverlays = () => {
+    setIsFiltersOpen(false);
+  };
+
+  const totalNodes = graphData.nodes.length;
+  const totalLinks = graphData.links.length;
+
   return (
-    <main>
-      <section className="panel app-header">
-        <div className="status-bar">
-          <div className="title-group">
-            <h1>TopoLens</h1>
-            <span className="status-pill" data-state={status}>
-              {statusLabel}
-            </span>
-          </div>
-          <div className="header-actions">
-            <button className="secondary" type="button" onClick={() => setIsFiltersOpen((value) => !value)}>
-              {isFiltersOpen ? "Hide filters" : "Show filters"}
-            </button>
-            <button className="secondary" type="button" onClick={() => setIsLogsOpen((value) => !value)}>
-              {isLogsOpen ? "Hide logs" : "Show logs"}
-            </button>
-            <button className="secondary" type="button" onClick={reconnect}>
-              Reconnect
-            </button>
-            <button className="secondary" type="button" onClick={clearHistory}>
-              Clear stored updates
-            </button>
-          </div>
-        </div>
-        <p>
-          Streaming live BGP announcements from the{" "}
-          <a href="https://ris-live.ripe.net/" target="_blank" rel="noreferrer">
-            RIPE RIS Live API
-          </a>
-          . Updates are persisted locally using your browser&apos;s IndexedDB for replay.
-        </p>
-        {error && <p className="error-text">{error}</p>}
-      </section>
+    <main className="relative min-h-screen overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 -z-20 bg-mystic-overlay" />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-mystic-grid opacity-25" />
+      {isFiltersOpen && (
+        <button
+          type="button"
+          aria-label="Close filters"
+          onClick={closeOverlays}
+          className="fixed inset-0 z-30 bg-slate-900/60 backdrop-blur-sm"
+        />
+      )}
 
-      <section className="panel graph-panel">
-        <div className="graph-header">
-          <h2>Live connectivity map</h2>
-          <span>{filteredUpdates.length} visible update{filteredUpdates.length === 1 ? "" : "s"}</span>
-        </div>
-        <div className="graph-canvas" ref={graphContainerRef}>
-          {graphSize.width > 0 && graphSize.height > 0 ? (
-            <ForceGraph2D<GraphNodeExtra, GraphLinkExtra>
-              ref={graphRef}
-              graphData={graphData}
-              width={graphSize.width}
-              height={graphSize.height}
-              cooldownTime={1500}
-              nodeRelSize={6}
-              nodeCanvasObject={(node, ctx, globalScale) => {
-                const typedNode = node as GraphNode;
-                const radius = 6;
-                const colors: Record<GraphNodeExtra["type"], string> = {
-                  peer: "#60a5fa",
-                  prefix: "#f97316",
-                  origin: "#34d399",
-                };
-                ctx.fillStyle = colors[typedNode.type];
-                ctx.beginPath();
-                ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
-                ctx.fill();
-                const label = typedNode.label;
-                if (!label) return;
-                const fontSize = Math.max(10, 14 / globalScale);
-                ctx.font = `${fontSize}px Inter, system-ui`;
-                ctx.textAlign = "center";
-                ctx.textBaseline = "top";
-                ctx.fillStyle = "#e2e8f0";
-                ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + radius + 2);
-              }}
-              nodePointerAreaPaint={(node, color, ctx) => {
-                const radius = 8;
-                ctx.fillStyle = color;
-                ctx.beginPath();
-                ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI, false);
-                ctx.fill();
-              }}
-              linkColor={(link) => (link.kind === "announce" ? "rgba(59, 130, 246, 0.6)" : "rgba(248, 113, 113, 0.6)")}
-              linkDirectionalParticles={2}
-              linkDirectionalParticleSpeed={() => 0.004}
-              linkDirectionalParticleWidth={2}
-              enableNodeDrag={false}
-              d3VelocityDecay={0.3}
-            />
-          ) : (
-            <div className="empty-state">Preparing graph…</div>
+      <div className="container relative z-40 flex min-h-screen flex-col gap-8 py-12">
+        <Card className="relative overflow-hidden border-slate-800/40 bg-slate-900/60">
+          <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-mystic-500/15 via-transparent to-slate-900/0" />
+          <CardHeader className="gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300/80">
+                <Badge variant={statusBadgeVariant}>{statusLabel}</Badge>
+                <span>{statusHelper}</span>
+              </div>
+              <div>
+                <CardTitle className="text-3xl text-white">TopoLens</CardTitle>
+                <CardDescription className="max-w-xl text-base text-slate-300">
+                  Observe global BGP relationships in near real-time through a mystic violet lens. Parsed updates are persisted locally for replay and deeper exploration.
+                </CardDescription>
+              </div>
+              {error && <p className="text-sm text-rose-300">{error}</p>}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="outline" onClick={() => setIsFiltersOpen((value) => !value)}>
+                {isFiltersOpen ? "Hide filters" : "Show filters"}
+                {activeFilterCount > 0 && (
+                  <span className="ml-2 inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded-full bg-mystic-500/20 px-2 text-xs text-mystic-100">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setIsLogsCollapsed((value) => !value)}>
+                {isLogsCollapsed ? "Expand logs" : "Collapse logs"}
+              </Button>
+              <Button variant="outline" onClick={reconnect}>
+                Reconnect
+              </Button>
+              <Button variant="ghost" onClick={clearHistory}>
+                Clear stored updates
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+
+        <Card className="relative flex min-h-[520px] flex-col border-slate-800/40 bg-slate-900/60">
+          <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-mystic-500/20 via-transparent to-slate-900/0" />
+          <CardHeader className="flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-2xl text-white">Live connectivity map</CardTitle>
+              <CardDescription className="text-slate-300/80">
+                {filteredUpdates.length} visible update{filteredUpdates.length === 1 ? "" : "s"}
+              </CardDescription>
+            </div>
+            <div className="flex flex-col items-start gap-2 text-xs text-slate-300/70 md:items-end">
+              {isGraphComputing && (
+                <Badge className="bg-mystic-500/20 text-mystic-100">Updating graph…</Badge>
+              )}
+              <div className="flex items-center gap-3">
+                <span>Nodes: {totalNodes}</span>
+                <span>Connections: {totalLinks}</span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col gap-4">
+            <div className="relative flex flex-1 overflow-hidden rounded-3xl border border-slate-800/50 bg-slate-950/60">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-mystic-500/20 via-transparent to-slate-950/80" />
+              {isGraphComputing && totalNodes === 0 ? (
+                <div className="relative z-10 flex flex-1 items-center justify-center p-6 text-sm text-slate-300">
+                  Building network view…
+                </div>
+              ) : totalNodes === 0 ? (
+                <div className="relative z-10 flex flex-1 items-center justify-center p-6 text-sm text-slate-300">
+                  No routes available for the current filters.
+                </div>
+              ) : (
+                <SigmaGraph nodes={graphData.nodes} links={graphData.links} />
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300/80">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#c4b5fd]" />
+                <span>Peers</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#8b5cf6]" />
+                <span>Prefixes</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#34d399]" />
+                <span>Origin AS</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-6 rounded-full bg-gradient-to-r from-purple-400/70 to-purple-500/60" />
+                <span>Announce link</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-6 rounded-full bg-gradient-to-r from-rose-400/70 to-rose-500/60" />
+                <span>Withdraw link</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col border-slate-800/40 bg-slate-900/70">
+          <CardHeader className="flex-row items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-xl text-white">Recent updates</CardTitle>
+              <CardDescription className="text-slate-300/80">
+                {filteredUpdates.length === 0 ? "No updates match the current filters." : "Latest persisted BGP events"}
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setIsLogsCollapsed((value) => !value)}>
+              {isLogsCollapsed ? "Expand" : "Collapse"}
+            </Button>
+          </CardHeader>
+          {!isLogsCollapsed && (
+            <CardContent className="flex-1 overflow-hidden">
+              {filteredUpdates.length === 0 ? (
+                <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-700/50 bg-slate-900/60 p-6 text-sm text-slate-300">
+                  No updates match the current filters.
+                </div>
+              ) : (
+                <div className="custom-scrollbar h-[320px] overflow-y-auto pr-2">
+                  <ul className="flex flex-col gap-3">
+                    {filteredUpdates.map((update) => (
+                      <UpdateRow
+                        update={update}
+                        key={update.id ?? `${update.prefix}-${update.timestamp}-${update.kind}`}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
           )}
-        </div>
-      </section>
+        </Card>
+      </div>
 
-      <aside className={`filter-drawer${isFiltersOpen ? " open" : ""}`}>
-        <div className="drawer-header">
-          <h2>Filters</h2>
-          <button className="secondary" type="button" onClick={() => setIsFiltersOpen(false)}>
-            Close
-          </button>
-        </div>
-        <div className="drawer-content">
-          <label htmlFor="filter-query">Filter updates by text or regex</label>
-          <input
-            id="filter-query"
-            type="text"
-            placeholder="Example: 192.0.2.0/24 or AS64496"
-            value={filterQuery}
-            onChange={(event) => setFilterQuery(event.target.value)}
-          />
-          <div className="filter-options">
-            <label className="checkbox">
-              <input type="checkbox" checked={useRegex} onChange={(event) => setUseRegex(event.target.checked)} />
-              Use regular expression
-            </label>
-            {filterQuery && (
-              <button className="secondary" type="button" onClick={() => setFilterQuery("")}>
-                Clear
-              </button>
-            )}
-          </div>
-          {filterError && <p className="error-text">{filterError}</p>}
-          <p className="drawer-helper">
-            Matching is applied to peers, prefixes, ASNs, and paths. Use filters to focus the live graph and logs on specific
-            routes.
-          </p>
-        </div>
-      </aside>
-
-      <aside className={`log-drawer${isLogsOpen ? " open" : ""}`}>
-        <div className="drawer-header">
-          <h2>Recent updates</h2>
-          <button className="secondary" type="button" onClick={() => setIsLogsOpen(false)}>
-            Close
-          </button>
-        </div>
-        <div className="drawer-content logs-content">
-          {filteredUpdates.length === 0 ? (
-            <div className="empty-state">No updates match the current filters.</div>
-          ) : (
-            <ul className="updates-list">
-              {filteredUpdates.map((update) => (
-                <UpdateRow
-                  update={update}
-                  key={update.id ?? `${update.prefix}-${update.timestamp}-${update.kind}`}
-                />
+      <div
+        className={cn(
+          "fixed left-1/2 top-12 z-40 w-[min(520px,92%)] -translate-x-1/2 transform transition-all duration-300",
+          isFiltersOpen ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-6 opacity-0",
+        )}
+      >
+        <Card className="border-slate-800/50 bg-slate-900/90 shadow-xl shadow-mystic-900/40">
+          <CardHeader className="flex-row items-center justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <CardTitle className="text-xl text-white">Filters</CardTitle>
+              <CardDescription className="text-sm text-slate-300/80">
+                Target specific peers, prefixes, ASNs, and message metadata.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <Badge className="bg-mystic-500/20 text-mystic-100">{activeFilterCount} active</Badge>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setIsFiltersOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="flex max-h-[75vh] flex-col gap-6 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="global-filter" className="text-sm font-medium text-slate-200">
+                Search every field
+              </label>
+              <Input
+                id="global-filter"
+                type="text"
+                placeholder="Quick search across peers, prefixes, ASNs, and paths"
+                value={globalQuery}
+                onChange={(event) => setGlobalQuery(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {FIELD_CONFIGS.map((field) => (
+                <div key={field.key} className="flex flex-col gap-2">
+                  <label
+                    htmlFor={`filter-${field.key}`}
+                    className="text-xs font-semibold uppercase tracking-wide text-slate-300/90"
+                  >
+                    {field.label}
+                  </label>
+                  <Input
+                    id={`filter-${field.key}`}
+                    type="text"
+                    placeholder={field.placeholder}
+                    value={fieldFilters[field.key]}
+                    onChange={(event) => handleFieldFilterChange(field.key, event.target.value)}
+                  />
+                </div>
               ))}
-            </ul>
-          )}
-        </div>
-      </aside>
+            </div>
+            {filterErrors.length > 0 && (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-200">
+                <p className="font-semibold">Regex error</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4">
+                  {filterErrors.map((message, index) => (
+                    <li key={`${message}-${index}`}>{message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2 rounded-xl border border-slate-800/60 bg-slate-900/80 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-300/80">Message kinds</p>
+                <Checkbox
+                  checked={kindFilters.announce}
+                  onChange={(event) => setKindFilters((prev) => ({ ...prev, announce: event.target.checked }))}
+                  label="Show announces"
+                />
+                <Checkbox
+                  checked={kindFilters.withdraw}
+                  onChange={(event) => setKindFilters((prev) => ({ ...prev, withdraw: event.target.checked }))}
+                  label="Show withdrawals"
+                />
+              </div>
+              <div className="flex flex-col gap-2 rounded-xl border border-slate-800/60 bg-slate-900/80 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-300/80">Address families</p>
+                <Checkbox
+                  checked={showIpv4}
+                  onChange={(event) => setShowIpv4(event.target.checked)}
+                  label="Include IPv4 prefixes"
+                />
+                <Checkbox
+                  checked={showIpv6}
+                  onChange={(event) => setShowIpv6(event.target.checked)}
+                  label="Include IPv6 prefixes"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+              <Checkbox
+                checked={useRegex}
+                onChange={(event) => setUseRegex(event.target.checked)}
+                label="Use regular expressions for text filters"
+              />
+              <Button variant="ghost" size="sm" onClick={resetFilters}>
+                Reset filters
+              </Button>
+            </div>
+            <p className="text-xs text-slate-400/80">
+              Filters apply to both the graph and the recent updates log. Enable regex mode for advanced matching.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }
