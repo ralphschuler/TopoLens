@@ -1,32 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addUpdates, clearUpdates, getRecentUpdates, type PersistedUpdate } from "../db/indexedDb";
 import type { ParseWorkerEvent, FetchWorkerEvent, FetchWorkerCommand } from "../workers/messages";
+import type { RipeUpdate } from "../utils/ris";
 
 export type ConnectionState = "connecting" | "connected" | "error";
 
 export function useRipeRis(limit = 50) {
   const [status, setStatus] = useState<ConnectionState>("connecting");
-  const [updates, setUpdates] = useState<PersistedUpdate[]>([]);
+  const [updates, setUpdates] = useState<RipeUpdate[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const fetchWorkerRef = useRef<Worker | null>(null);
   const isMountedRef = useRef(true);
-
-  const loadLatest = useCallback(async () => {
-    const latest = await getRecentUpdates(limit);
-    if (isMountedRef.current) {
-      setUpdates(latest);
-    }
-  }, [limit]);
+  const limitRef = useRef(limit);
 
   useEffect(() => {
-    loadLatest().catch((err) => {
-      console.error("Failed to load updates", err);
-      if (isMountedRef.current) {
-        setError("Failed to load stored updates");
-      }
-    });
-  }, [loadLatest]);
+    limitRef.current = limit;
+    setUpdates((previous) => previous.slice(0, limit));
+  }, [limit]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -45,6 +35,7 @@ export function useRipeRis(limit = 50) {
       if (!message) return;
       switch (message.type) {
         case "status":
+          if (!isMountedRef.current) return;
           setStatus(message.status);
           if (message.status === "connected") {
             setError(null);
@@ -54,6 +45,7 @@ export function useRipeRis(limit = 50) {
           parseWorker.postMessage({ type: "parse", payload: message.payload });
           break;
         case "error":
+          if (!isMountedRef.current) return;
           setError(message.error);
           break;
         case "closed":
@@ -68,17 +60,20 @@ export function useRipeRis(limit = 50) {
       if (!message) return;
       switch (message.type) {
         case "updates":
+          if (!isMountedRef.current) return;
           if (message.updates.length > 0) {
-            void addUpdates(message.updates)
-              .then(loadLatest)
-              .catch((err: unknown) => {
-                console.error("Failed to persist updates", err);
-                if (!isMountedRef.current) return;
-                setError("Failed to persist updates");
-              });
+            setUpdates((previous) => {
+              const merged = [...message.updates, ...previous];
+              const max = limitRef.current;
+              if (merged.length <= max) {
+                return merged;
+              }
+              return merged.slice(0, max);
+            });
           }
           break;
         case "error":
+          if (!isMountedRef.current) return;
           setError(message.error);
           break;
         default:
@@ -101,7 +96,7 @@ export function useRipeRis(limit = 50) {
       parseWorker.terminate();
       fetchWorkerRef.current = null;
     };
-  }, [loadLatest]);
+  }, []);
 
   const reconnect = useCallback(() => {
     setError(null);
@@ -113,11 +108,9 @@ export function useRipeRis(limit = 50) {
     }
   }, []);
 
-  const clearHistory = useCallback(async () => {
-    await clearUpdates();
-    if (isMountedRef.current) {
-      setUpdates([]);
-    }
+  const clearHistory = useCallback(() => {
+    if (!isMountedRef.current) return;
+    setUpdates([]);
   }, []);
 
   return { status, updates, error, reconnect, clearHistory };

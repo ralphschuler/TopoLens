@@ -1,6 +1,5 @@
 /// <reference lib="webworker" />
 
-import type { PersistedUpdate } from "../db/indexedDb";
 import type {
   GraphLinkPayload,
   GraphNodePayload,
@@ -8,6 +7,7 @@ import type {
   GraphWorkerCommand,
   GraphWorkerEvent,
 } from "./messages";
+import type { RipeUpdate } from "../utils/ris";
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -63,7 +63,7 @@ function trackLink(
   map.set(key, { source, target, kind, relation, count: 1 });
 }
 
-function buildGraph(updates: PersistedUpdate[]): GraphPayload {
+function buildGraph(updates: RipeUpdate[]): GraphPayload {
   const nodeMap = new Map<string, NodeAccumulator>();
   const linkMap = new Map<string, LinkAccumulator>();
 
