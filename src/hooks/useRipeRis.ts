@@ -1,25 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addUpdates, clearUpdates, getRecentUpdates, type PersistedUpdate } from "../db/indexedDb";
-import { extractUpdates } from "../utils/ris";
+import type { ParseWorkerEvent, FetchWorkerEvent, FetchWorkerCommand } from "../workers/messages";
 
 export type ConnectionState = "connecting" | "connected" | "error";
-
-const RIS_ENDPOINT = "wss://ris-live.ripe.net/v1/ws/";
-const SUBSCRIPTION_MESSAGE = JSON.stringify({
-  type: "ris_subscribe",
-  data: {
-    host: "rrc00.ripe.net",
-  },
-});
 
 export function useRipeRis(limit = 50) {
   const [status, setStatus] = useState<ConnectionState>("connecting");
   const [updates, setUpdates] = useState<PersistedUpdate[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const connectRef = useRef<() => void>();
+  const fetchWorkerRef = useRef<Worker | null>(null);
   const isMountedRef = useRef(true);
 
   const loadLatest = useCallback(async () => {
@@ -30,86 +20,97 @@ export function useRipeRis(limit = 50) {
   }, [limit]);
 
   useEffect(() => {
-    loadLatest();
+    loadLatest().catch((err) => {
+      console.error("Failed to load updates", err);
+      if (isMountedRef.current) {
+        setError("Failed to load stored updates");
+      }
+    });
   }, [loadLatest]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    const connect = () => {
-      setStatus("connecting");
-      setError(null);
-      const ws = new WebSocket(RIS_ENDPOINT);
-      wsRef.current = ws;
 
-      ws.addEventListener("open", () => {
-        if (!isMountedRef.current) return;
-        setStatus("connected");
-        ws.send(SUBSCRIPTION_MESSAGE);
-      });
+    const fetchWorker = new Worker(new URL("../workers/fetchWorker.ts", import.meta.url), {
+      type: "module",
+    });
+    const parseWorker = new Worker(new URL("../workers/parseWorker.ts", import.meta.url), {
+      type: "module",
+    });
 
-      ws.addEventListener("message", (event) => {
-        if (!isMountedRef.current) return;
-        try {
-          const parsed = JSON.parse(event.data);
-          const extracted = extractUpdates(parsed);
-          if (extracted.length > 0) {
-            void addUpdates(extracted).then(loadLatest).catch((err: unknown) => {
-              console.error("Failed to persist updates", err);
-              if (!isMountedRef.current) return;
-              setError("Failed to persist updates");
-            });
+    fetchWorkerRef.current = fetchWorker;
+
+    const handleFetchMessage = (event: MessageEvent<FetchWorkerEvent>) => {
+      const message = event.data;
+      if (!message) return;
+      switch (message.type) {
+        case "status":
+          setStatus(message.status);
+          if (message.status === "connected") {
+            setError(null);
           }
-        } catch (err) {
-          console.error("Failed to parse RIS message", err);
-          setError("Failed to parse update message");
-        }
-      });
-
-      ws.addEventListener("error", (event) => {
-        console.error("WebSocket error", event);
-        if (!isMountedRef.current) return;
-        setStatus("error");
-        setError("WebSocket connection error");
-      });
-
-      ws.addEventListener("close", () => {
-        if (!isMountedRef.current) return;
-        setStatus("error");
-        if (reconnectTimerRef.current) {
-          clearTimeout(reconnectTimerRef.current);
-        }
-        reconnectTimerRef.current = setTimeout(() => {
-          if (isMountedRef.current) {
-            connect();
-          }
-        }, 4000);
-      });
-    };
-
-    connectRef.current = () => {
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
+          break;
+        case "message":
+          parseWorker.postMessage({ type: "parse", payload: message.payload });
+          break;
+        case "error":
+          setError(message.error);
+          break;
+        case "closed":
+          break;
+        default:
+          break;
       }
-      wsRef.current?.close();
-      connect();
     };
 
-    connect();
+    const handleParseMessage = (event: MessageEvent<ParseWorkerEvent>) => {
+      const message = event.data;
+      if (!message) return;
+      switch (message.type) {
+        case "updates":
+          if (message.updates.length > 0) {
+            void addUpdates(message.updates)
+              .then(loadLatest)
+              .catch((err: unknown) => {
+                console.error("Failed to persist updates", err);
+                if (!isMountedRef.current) return;
+                setError("Failed to persist updates");
+              });
+          }
+          break;
+        case "error":
+          setError(message.error);
+          break;
+        default:
+          break;
+      }
+    };
+
+    fetchWorker.addEventListener("message", handleFetchMessage);
+    parseWorker.addEventListener("message", handleParseMessage);
+
+    const startCommand: FetchWorkerCommand = { type: "start" };
+    fetchWorker.postMessage(startCommand);
 
     return () => {
       isMountedRef.current = false;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      wsRef.current?.close();
+      fetchWorker.removeEventListener("message", handleFetchMessage);
+      parseWorker.removeEventListener("message", handleParseMessage);
+      fetchWorker.postMessage({ type: "stop" });
+      fetchWorker.terminate();
+      parseWorker.terminate();
+      fetchWorkerRef.current = null;
     };
   }, [loadLatest]);
 
   const reconnect = useCallback(() => {
     setError(null);
-    connectRef.current?.();
+    setStatus("connecting");
+    const worker = fetchWorkerRef.current;
+    if (worker) {
+      const command: FetchWorkerCommand = { type: "reconnect" };
+      worker.postMessage(command);
+    }
   }, []);
 
   const clearHistory = useCallback(async () => {
