@@ -5,52 +5,84 @@
 @layer base {
   :root {
     color-scheme: dark;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-width: 320px;
+    min-height: 100%;
+    background: #060a12;
   }
 
   body {
-    @apply min-h-screen bg-midnight font-sans text-slate-100 antialiased;
-    background-image: theme("backgroundImage.mystic-overlay");
-    background-size: cover;
-    background-attachment: fixed;
+    @apply m-0 min-h-screen overflow-x-hidden bg-slate-950 font-sans text-slate-100 antialiased;
+    min-height: 100dvh;
+    background-image:
+      radial-gradient(circle at 8% -10%, rgba(6, 182, 212, 0.11), transparent 30rem),
+      radial-gradient(circle at 100% 20%, rgba(99, 102, 241, 0.08), transparent 28rem),
+      linear-gradient(rgba(30, 41, 59, 0.16) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 41, 59, 0.16) 1px, transparent 1px);
+    background-position: center;
+    background-size:
+      auto,
+      auto,
+      32px 32px,
+      32px 32px;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    @apply font-semibold text-slate-100;
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 
-  p {
-    @apply text-slate-300;
+  button,
+  input,
+  select {
+    font: inherit;
   }
 
-  a {
-    @apply text-slate-200 underline-offset-4 transition-colors hover:text-white;
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: rgba(34, 211, 238, 0.28);
+    color: #ecfeff;
   }
 }
 
-@layer utilities {
-  .bg-mystic-grid {
-    background-image: theme("backgroundImage.mystic-grid");
-    background-size: 48px 48px;
+@layer components {
+  .topology-panel {
+    @apply overflow-hidden rounded-2xl border border-slate-800/90 bg-slate-950/80 shadow-2xl shadow-black/20 backdrop-blur-xl;
   }
 
-  .shadow-mystic {
-    box-shadow: 0 30px 60px -40px rgba(139, 92, 246, 0.55);
+  .telemetry-label {
+    @apply font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500;
+  }
+
+  .control-select {
+    @apply h-11 rounded-xl border border-slate-700/80 bg-slate-900 px-3 text-xs text-slate-200 outline-none transition focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/20;
+  }
+
+  .graph-canvas canvas {
+    outline: none;
   }
 }
 
 @layer utilities {
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+    scrollbar-color: rgba(71, 85, 105, 0.8) transparent;
   }
 
   .custom-scrollbar::-webkit-scrollbar {
-    width: 0.5rem;
+    width: 0.45rem;
+    height: 0.45rem;
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
@@ -59,6 +91,21 @@
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: linear-gradient(180deg, rgba(168, 85, 247, 0.45), rgba(59, 130, 246, 0.45));
+    background: rgba(71, 85, 105, 0.8);
+  }
+
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

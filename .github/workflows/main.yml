@@ -1,34 +1,47 @@
-name: Main Branch Hygiene
+name: Main Quality Gate
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+
+concurrency:
+  group: main-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  lint-and-format:
-    name: Lint & Format with Autofix
+  quality:
+    name: Typecheck, lint, test & build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        project: [api, web]
-    defaults:
-      run:
-        working-directory: ${{ matrix.project }}
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-          cache-dependency-path: ${{ matrix.project }}/package-lock.json
-      - run: npm ci
-      - run: npm run lint:fix
-      - run: npm run format:write
-      - name: Ensure clean working tree
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Uncommitted changes detected after autofix. Please format and lint before pushing."
-            git status --short
-            exit 1
-          fi
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
