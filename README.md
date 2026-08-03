@@ -10,6 +10,8 @@ There is no backend, database, account, or BGP daemon. The production build is a
 - A chronological change feed for first observations, path changes, origin changes, known withdrawals, and unmatched withdrawals.
 - A detail inspector with the previous and current route, origin, and edge diff for a selected change.
 - A configurable RIPE RIS scope: route collector, IPv4/IPv6 prefix, and AS-path filter.
+- A RIPEstat-backed network-name search that resolves organizations such as Facebook to explicit
+  ASN candidates before starting an origin-scoped live session.
 - Explicit connection, reconnecting, warming, partial-data, retention, and error states.
 - Touch-friendly controls and responsive layouts for phones, tablets, and desktop browsers.
 - Bounded in-memory route and change buffers so a long-running tab cannot grow without limit.
@@ -41,6 +43,16 @@ TopoLens sends scope filters as part of the RIS Live subscription, reducing nois
 - **AS path**: a single ASN or a RIS-compatible path expression.
 
 Leaving prefix and path blank requests a broad collector stream. That can be noisy, especially on mobile hardware. Start with a prefix or ASN when investigating a specific network. Applying a different scope starts a fresh observation baseline; changes from incompatible scopes must not be compared as if they belonged to one continuous route state.
+
+The **Find a network by name** control resolves a company or registered network name through the
+[RIPEstat Searchcomplete API](https://stat.ripe.net/docs/data-api/api-endpoints/searchcomplete).
+TopoLens always shows the returned ASN and registry description so you
+can disambiguate names before choosing **Watch origin**. That action clears the prefix filter and
+starts a fresh subscription using an origin-anchored path such as `32934$`; the resulting stream is
+therefore limited to announcements whose observed AS path ends in the selected ASN. If RIPEstat is
+unavailable, the live stream keeps running and you can enter an ASN or path expression manually in
+the Scope dialog. Withdrawals generally have no AS path to match, so an origin-scoped session is an
+announcement view rather than complete withdrawal history.
 
 ## Architecture
 

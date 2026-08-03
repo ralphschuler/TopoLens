@@ -6,8 +6,13 @@ import type { RouteTrackerSnapshot, TopologyChange } from "./topology/routeTrack
 import type { GraphPayload } from "./workers/messages";
 
 const mocks = vi.hoisted(() => ({
+  lookupAsns: vi.fn(),
   useGraphData: vi.fn(),
   useRipeRis: vi.fn(),
+}));
+
+vi.mock("./utils/ripeStat", () => ({
+  lookupAsns: mocks.lookupAsns,
 }));
 
 vi.mock("./hooks/useGraphData", () => ({
@@ -92,6 +97,7 @@ interface MountedApp {
 const mountedApps: MountedApp[] = [];
 let animationFrames: FrameRequestCallback[];
 let clearSession: ReturnType<typeof vi.fn>;
+let configure: ReturnType<typeof vi.fn>;
 
 function buttonNamed(name: string | RegExp): HTMLButtonElement {
   const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((candidate) => {
@@ -106,6 +112,19 @@ function regionNamed(name: string): HTMLElement {
   const region = document.querySelector<HTMLElement>(`[aria-label="${name}"]`);
   if (!region) throw new Error(`Could not find region named ${name}`);
   return region;
+}
+
+function inputNamed(name: string): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
+  if (!input) throw new Error(`Could not find input named ${name}`);
+  return input;
+}
+
+function enterText(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  if (!setter) throw new Error("HTML input value setter is unavailable");
+  setter.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 async function renderApp(): Promise<void> {
@@ -129,6 +148,8 @@ beforeEach(() => {
   });
 
   clearSession = vi.fn();
+  configure = vi.fn();
+  mocks.lookupAsns.mockResolvedValue([]);
   const now = Date.now();
   const change = makeChange(now - 1_000);
 
@@ -153,7 +174,7 @@ beforeEach(() => {
     resume: vi.fn(),
     reconnect: vi.fn(),
     clearSession,
-    configure: vi.fn(),
+    configure,
   });
   mocks.useGraphData.mockReturnValue({
     graph: EMPTY_GRAPH,
@@ -207,6 +228,44 @@ describe("TopoLens mobile accessibility flows", () => {
     await act(async () => buttonNamed("Clear local session state").click());
 
     expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves a network name and starts an origin-scoped announcement session", async () => {
+    mocks.lookupAsns.mockResolvedValue([
+      {
+        asn: 32934,
+        label: "AS32934",
+        description: "FACEBOOK - Facebook, Inc.",
+      },
+      {
+        asn: 54115,
+        label: "AS54115",
+        description: "FACEBOOK-CORP - Facebook Inc",
+      },
+    ]);
+    await renderApp();
+
+    const input = inputNamed("Find network by name or ASN");
+    await act(async () => enterText(input, "Facebook"));
+    await act(async () => {
+      buttonNamed("Search ASN").click();
+      await Promise.resolve();
+    });
+
+    expect(mocks.lookupAsns).toHaveBeenCalledWith(
+      "Facebook",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(buttonNamed(/Watch origin announcements for AS32934/)).toBeTruthy();
+    expect(buttonNamed(/Watch origin announcements for AS54115/)).toBeTruthy();
+
+    await act(async () => buttonNamed(/Watch origin announcements for AS32934/).click());
+
+    expect(configure).toHaveBeenCalledWith({
+      collector: "rrc00",
+      prefix: "",
+      path: "32934$",
+    });
   });
 
   it("focuses the inspector close action and restores focus to the remounted event", async () => {
