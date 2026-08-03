@@ -38,6 +38,16 @@ describe("RIS subscription helpers", () => {
     });
   });
 
+  it("preserves an origin-anchored ASN path filter", () => {
+    const subscription = { collector: "rrc00", prefix: "", path: "32934$" };
+
+    expect(validateRisSubscription(subscription)).toBe("");
+    expect(buildRisSubscriptionPayload(subscription)).toMatchObject({
+      host: "rrc00",
+      path: "32934$",
+    });
+  });
+
   it("preserves official AS-path patterns and normalizes whitespace", () => {
     const normalized = normalizeRisSubscription({
       collector: "rrc00.ripe.net",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ChangeFeed } from "./components/ChangeFeed";
 import { ChangeInspector } from "./components/ChangeInspector";
+import { NetworkSearch } from "./components/NetworkSearch";
 import { ScopeDialog } from "./components/ScopeDialog";
 import SigmaGraph from "./components/SigmaGraph";
 import { Button } from "./components/ui/button";
@@ -157,11 +158,12 @@ function ScopeSummary({
   prefix: string;
   path: string;
 }) {
+  const originAsn = path.match(/^(\d+)\$$/)?.[1];
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] text-slate-500">
       <span className="text-cyan-300">{collector}</span>
       <span>{prefix || "all prefixes"}</span>
-      {path && <span>path:{path}</span>}
+      {path && <span>{originAsn ? `origin:AS${originAsn}` : `path:${path}`}</span>}
       <span className="rounded border border-amber-400/20 bg-amber-400/[0.06] px-1.5 py-0.5 text-amber-200">
         session partial
       </span>
@@ -260,6 +262,14 @@ export default function App(): JSX.Element {
     setGraphRenderError(null);
     setGraphRendererKey((current) => current + 1);
     clearSession();
+  };
+
+  const applySubscription = (nextSubscription: typeof subscription) => {
+    setSelectedSequence(null);
+    setSelectedNodeId(null);
+    setGraphRenderError(null);
+    setGraphRendererKey((current) => current + 1);
+    configure(nextSubscription);
   };
 
   const closeInspector = () => {
@@ -396,6 +406,18 @@ export default function App(): JSX.Element {
             )}
           </section>
         )}
+
+        <NetworkSearch
+          collector={subscription.collector}
+          onWatch={(network) => {
+            setQuery("");
+            applySubscription({
+              collector: subscription.collector,
+              prefix: "",
+              path: `${network.asn}$`,
+            });
+          }}
+        />
 
         <section className="topology-panel p-2.5 sm:p-3" aria-label="View filters">
           <div className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_auto_auto_auto]">
@@ -675,13 +697,7 @@ export default function App(): JSX.Element {
         open={scopeOpen}
         subscription={subscription}
         onClose={() => setScopeOpen(false)}
-        onApply={(nextSubscription) => {
-          setSelectedSequence(null);
-          setSelectedNodeId(null);
-          setGraphRenderError(null);
-          setGraphRendererKey((current) => current + 1);
-          configure(nextSubscription);
-        }}
+        onApply={applySubscription}
       />
     </div>
   );
