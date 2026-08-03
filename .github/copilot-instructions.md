@@ -1,195 +1,70 @@
 # TopoLens Copilot Instructions
 
-## Project Overview
+## Project overview
 
-TopoLens is a self-contained BGP visualization stack that provides real-time network topology visualization. The project consists of multiple services orchestrated with Docker Compose:
+TopoLens is a mobile-ready network-engineering tool that visualizes topology changes observed from RIPE RIS Live. It is one static Vite + React + TypeScript application running entirely in the browser and deployed to GitHub Pages.
 
-- **GoBGP collector**: Peers with BGP routers to collect routing information
-- **Node.js API** (Fastify): Processes BGP data and provides REST/WebSocket endpoints
-- **Web frontend** (Vite + TypeScript): Canvas-based visualization with real-time updates
-- **SQLite persistence**: Stores routing data and topology information
+Do not assume or add server-side services, persistence, container orchestration, or separate workspaces. All commands run at the repository root.
 
-## Architecture & Project Structure
+## Observation model
 
-```
-├── api/                    # Backend API service (Node.js + Fastify)
-│   ├── src/
-│   │   ├── __tests__/     # Vitest unit tests
-│   │   ├── app.ts         # Fastify app configuration
-│   │   ├── db.ts          # SQLite database operations
-│   │   ├── collector.ts   # BGP data collection logic
-│   │   ├── index.ts       # Server entry point
-│   │   └── types.ts       # TypeScript type definitions
-│   └── package.json       # API dependencies & scripts
-├── web/                   # Frontend web application (Vite + TypeScript)
-│   ├── src/
-│   │   ├── __tests__/     # Vitest unit tests
-│   │   ├── api.ts         # API client utilities
-│   │   ├── canvas.ts      # Canvas rendering & graph layout
-│   │   └── main.ts        # Application entry point
-│   └── package.json       # Web dependencies & scripts
-├── gobgp/                 # GoBGP configuration
-├── docker-compose.yml     # Multi-service orchestration
-└── .github/workflows/     # CI/CD automation
-```
+TopoLens has no initial RIB snapshot. Its state is valid only for the current browser session and selected RIS subscription:
 
-## Development Guidelines
+1. A fetch worker subscribes to a RIPE route collector, optionally narrowed by prefix and AS path.
+2. RIS envelopes are normalized into per-prefix announcements and withdrawals.
+3. A stateful `RouteTracker` indexes routes by `(collector, peer, prefix)` and compares each update with the last locally observed state.
+4. Bounded snapshots feed the change list, inspector, counters, and AS-path graph.
+5. Graph computation stays off the React render path.
 
-### Code Quality Standards
+Never imply that the graph is a complete internet topology. Keep these meanings precise:
 
-Both `api/` and `web/` packages maintain identical quality standards:
+- `warming`: live observations are still establishing local baselines;
+- `partial`: scope, start time, disconnect gaps, and retention limits make the view incomplete;
+- `first-observed`: first announcement for a local route key, not proof of global route creation;
+- `withdrawal-observed`: withdrawal without a route baseline, with no fabricated path or edge diff.
 
-- **TypeScript**: All code is written in TypeScript with strict typing
-- **ESLint**: Code linting with TypeScript ESLint rules (`@typescript-eslint/no-explicit-any` is disabled)
-- **Prettier**: Code formatting with project-specific configuration
-- **Vitest**: Unit testing framework for both packages
+## Topology rules
 
-### Required Scripts (Both Packages)
+- Preserve ordered ASN path segments and unordered AS sets.
+- Build an AS edge only between adjacent, unambiguous ASN segments.
+- Ignore AS-prepending self loops in the graph.
+- Preserve the full normalized path for the inspector even when it yields no edge.
+- Classify path and origin changes deterministically; do not double-count one transition.
+- Identical announcements refresh state but are not topology changes.
+- Known withdrawals remove retained routes; unknown withdrawals remain honest observations.
+- Route and change retention must stay bounded, with eviction/drop counters exposed.
+- Applying a new collector/prefix/path scope starts a clean route-tracking session.
 
-```json
-{
-  "test": "vitest run", // Run all tests
-  "lint": "eslint --max-warnings=0 \"src/**/*.{ts,tsx}\"",
-  "lint:fix": "npm run lint -- --fix",
-  "format": "prettier --check \"src/**/*.{ts,tsx,js,json}\"",
-  "format:write": "prettier --write \"src/**/*.{ts,tsx,js,json}\""
-}
-```
+## UX requirements
 
-### Testing Strategy
+- Treat phone layouts as a primary target, not a scaled-down desktop afterthought.
+- Avoid horizontal page overflow and keep the graph usable beneath overlays or drawers.
+- Primary touch targets should be at least 44 × 44 CSS pixels.
+- Every hover interaction needs a tap/click and keyboard equivalent.
+- Preserve visible focus, semantic labels, status announcements, and explicit dismiss actions.
+- Keep socket connection status distinct from observation completeness.
+- Favor dense, inspectable technical data, but define potentially misleading routing terms nearby.
+- Show errors and reconnection state without discarding already retained session data unless the user resets or changes scope.
 
-- **Unit Tests**: Located in `src/__tests__/` directories
-- **Test Framework**: Vitest for both packages
-- **Mock Strategy**: Use Vitest's built-in mocking (`vi.mock()`)
-- **Database Tests**: Use in-memory SQLite (`:memory:`) for API tests
-- **DOM Tests**: Use happy-dom for web frontend tests
+## Development and quality
 
-### CI/CD Requirements
-
-- **PR Quality Gate**: All tests, linting, and formatting must pass
-- **Main Branch Hygiene**: Automatic formatting and linting on main branch
-- **Matrix Strategy**: CI runs separately for `api/` and `web/` packages
-
-## Technology-Specific Patterns
-
-### API Service (Fastify + SQLite)
-
-- **Database**: SQLite with WAL mode for persistence
-- **WebSocket**: Real-time BGP updates via `@fastify/websocket`
-- **Environment**: Supports both demo mode and live BGP peering
-- **Error Handling**: Graceful handling of BGP collector failures
-
-Key patterns:
-
-```typescript
-// Database operations use WAL mode SQLite
-const db = new DatabaseSync(dbPath);
-db.exec("PRAGMA journal_mode=WAL");
-
-// Fastify with WebSocket support
-const app = Fastify({ logger: true });
-await app.register(websocket);
-```
-
-### Web Frontend (Canvas + WebSocket)
-
-- **Rendering**: HTML5 Canvas with force-directed graph layout
-- **Real-time**: WebSocket connection for live BGP updates
-- **Interaction**: Pan, zoom, and node selection capabilities
-- **Performance**: Optimized for large network topologies
-
-Key patterns:
-
-```typescript
-// Canvas-based graph visualization
-class CanvasGraph {
-  private simulate(dt: number) {
-    /* physics simulation */
-  }
-  private draw() {
-    /* canvas rendering */
-  }
-}
-
-// WebSocket integration
-connectWS((msg) => {
-  if (msg.type === "announce") {
-    graph.applyAnnounce(msg.origin_as, msg.as_path);
-  }
-});
-```
-
-### BGP Data Processing
-
-- **RIB Snapshots**: Initial routing table load via `gobgp -j global rib`
-- **Live Updates**: Stream processing via `gobgp monitor global updates -j`
-- **AS Path Analysis**: Extract topology edges from BGP AS paths
-- **Demo Mode**: Synthetic data generation when BGP peer unavailable
-
-## Development Workflow
-
-### Starting Development
-
-1. **Install Dependencies**: `npm install` in both `api/` and `web/`
-2. **Environment Setup**: Copy `.env.example` to `.env`, set `DEMO_MODE=true` for development
-3. **Development Mode**:
-   - API: `cd api && npm run dev` (tsx watch mode)
-   - Web: `cd web && npm run dev` (Vite dev server)
-4. **Full Stack**: `docker compose up --build` (production-like environment)
-
-### Testing & Quality
-
-**Before making changes:**
+Use Node.js 22. Install and run all tooling from the root:
 
 ```bash
-cd api && npm test && npm run lint && npm run format
-cd ../web && npm test && npm run lint && npm run format
+npm ci
+npm run typecheck
+npm run lint
+npm run format
+npm run test
+npm run build
 ```
 
-**Code changes should:**
+Use strict TypeScript and avoid `any` at protocol boundaries; validate `unknown` input instead. Prefer pure normalization and topology functions, deterministic fixtures, defensive snapshots, and explicit worker message types. Do not mutate objects owned by another layer.
 
-- Add/update tests first (test-driven development)
-- Pass all existing tests without modification
-- Follow existing patterns and conventions
-- Include proper TypeScript typing
-- Handle edge cases and error conditions
+Tests should cover protocol normalization, scope payloads, route transition classification, collector/peer isolation, exact edge diffs, AS sets, prepending, malformed data, known and unknown withdrawals, reconnect gaps, buffer limits, and user-visible responsive flows. Automated tests must not wait for an unpredictable public RIS update.
 
-### Common Tasks
+Generated `dist/` assets are build output and must not be edited manually.
 
-- **Adding BGP Features**: Extend `collector.ts` and corresponding tests
-- **API Endpoints**: Add routes in `app.ts` with proper error handling
-- **Visualization Features**: Enhance `canvas.ts` with new rendering capabilities
-- **Database Schema**: Update `schema.sql` and migration logic in `db.ts`
+## GitHub Pages
 
-## Debugging & Troubleshooting
-
-### Common Issues
-
-- **Empty Visualization**: Enable `DEMO_MODE=true` for development
-- **BGP Connection Issues**: Check GoBGP configuration and network reachability
-- **Performance Issues**: Consider topology size limits and rendering optimizations
-- **WebSocket Disconnections**: Implement reconnection logic and heartbeat monitoring
-
-### Development Tools
-
-- **API Logs**: Fastify provides structured logging
-- **Database Inspection**: SQLite CLI tools for data examination
-- **Network Analysis**: Browser developer tools for WebSocket monitoring
-- **Canvas Debugging**: Browser performance profiling for rendering optimization
-
-## Deployment Considerations
-
-- **Production**: Set `DEMO_MODE=false` and configure real BGP peering
-- **Security**: Expose services only on trusted networks
-- **Scaling**: Consider AS-level aggregation for large topologies
-- **Monitoring**: Add health checks and observability hooks
-- **Data Retention**: Implement aging policies for historical data
-
-## File Naming Conventions
-
-- **Tests**: `*.test.ts` in `src/__tests__/` directories
-- **Types**: Centralized in `types.ts` files
-- **Configuration**: `*.config.*` for tooling configuration
-- **Environment**: `.env` for runtime configuration
-
-When implementing new features or fixing issues, ensure compatibility with the existing Docker-based deployment model while maintaining the high standards for code quality and testing coverage.
+Keep production browser-only. Vite reads `BASE_PATH` during the Pages build. Any deployment change must preserve asset loading on both `/` and repository subpaths. GitHub Pages deployment is allowed only after root type checking, linting, formatting checks, tests, and build all succeed.
